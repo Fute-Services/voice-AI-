@@ -1,0 +1,11 @@
+Rahul: Hello, haan Priya, main Rahul bol raha hoon Sharma Logistics se. Kya aapke paas do minute hain?
+Priya: Haan Rahul, boliye. Main abhi office se nikal rahi thi, but it's okay, batao.
+Rahul: Actually wo invoice number four five seven two ka payment abhi tak pending dikh raha hai. Amount hai thirty eight thousand five hundred rupees.
+Priya: Achha, wo wala. Mujhe laga accounts team ne last Friday ko hi transfer kar diya tha. Ek second, main check karti hoon.
+Rahul: Koi baat nahi, aap aaram se check kijiye. Agar UTR number mil jaaye toh please mujhe WhatsApp kar dena.
+Priya: Okay, mil gaya. Payment twenty second October ko initiate hua tha, but bank ne reject kar diya kyunki IFSC code galat tha.
+Rahul: Oh, that explains it. Sahi IFSC code hai HDFC zero zero zero one two three four. Main aapko email pe bhi bhej deta hoon.
+Priya: Perfect. Main kal subah tak dobara process karwa dungi. Kuch aur?
+Rahul: Bas ek cheez, next month se hamara rate per kilo thoda revise ho raha hai, to main aapko new rate card bhej doonga.
+Priya: Theek hai, bhej dijiye, main apne manager Mr. Iyer ke saath discuss kar lungi. Thank you Rahul.
+Rahul: Thank you so much Priya, have a good evening. Bye.

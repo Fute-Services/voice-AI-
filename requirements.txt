@@ -1,0 +1,9 @@
+google-genai>=2.33
+httpx>=0.28
+python-dotenv>=1.0
+tenacity>=9.0
+jiwer>=4.0
+fastapi>=0.115
+uvicorn>=0.30
+python-multipart>=0.0.9
+pytest>=8.0

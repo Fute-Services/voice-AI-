@@ -1,0 +1,3 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: calls real APIs (needs keys in .env)"]

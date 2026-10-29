@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hinglish Transcriber</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #fff; --text: #1b1f24; --muted: #5f6b7a; --border: #dde2e8;
+    --accent: #2457d6; --accent-text: #fff; --warn-bg: #fff4e0; --warn: #9a5b00; --err-bg: #fde8e8; --err: #a12020;
+    --s1: #2457d6; --s2: #b2470f; --s3: #127a4b; --s4: #7b3fb0; --active: #eef3ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418; --panel: #1a1e24; --text: #e6e9ee; --muted: #9aa5b3; --border: #2c323b;
+      --accent: #6d95ff; --accent-text: #0b0e12; --warn-bg: #3a2c12; --warn: #f2b45a; --err-bg: #3d1a1a; --err: #ff9b9b;
+      --s1: #7ea2ff; --s2: #ff9b63; --s3: #5fd29c; --s4: #c99bff; --active: #222b3d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .drop { border: 2px dashed var(--border); border-radius: 8px; padding: 22px; text-align: center; cursor: pointer; color: var(--muted); }
+  .drop.over, .drop:hover { border-color: var(--accent); }
+  .drop strong { color: var(--text); }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; align-items: end; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+  select, input[type=text], input[type=number] { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); min-width: 0; }
+  .check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); }
+  button { font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 6px; border: 1px solid var(--accent); cursor: pointer; }
+  .primary { background: var(--accent); color: var(--accent-text); }
+  .secondary { background: transparent; color: var(--accent); }
+  button:disabled { opacity: .5; cursor: wait; }
+  .status { margin-top: 12px; color: var(--muted); min-height: 1.5em; }
+  .error { background: var(--err-bg); color: var(--err); padding: 10px 12px; border-radius: 6px; white-space: pre-wrap; word-break: break-word; }
+  .stats { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 14px; color: var(--muted); }
+  .stats b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .dl { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+  .dl a { color: var(--accent); font-size: 14px; }
+  audio { width: 100%; margin: 12px 0 4px; }
+  .hint { font-size: 13px; color: var(--muted); margin: 0; }
+  .seg { display: grid; grid-template-columns: 74px 1fr; gap: 4px 12px; padding: 10px 8px; border-radius: 6px; cursor: pointer; border-left: 3px solid transparent; }
+  .seg:hover { background: var(--active); }
+  .seg.playing { background: var(--active); border-left-color: var(--accent); }
+  .seg.flagged { background: var(--warn-bg); }
+  .time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; padding-top: 2px; }
+  .who { font-weight: 600; font-size: 13px; }
+  .text { grid-column: 2; overflow-wrap: anywhere; }
+  .raw { grid-column: 2; font-size: 13px; color: var(--muted); display: none; overflow-wrap: anywhere; }
+  .showraw .raw { display: block; }
+  .flags { grid-column: 2; font-size: 12px; color: var(--warn); }
+  .unclear { background: var(--warn-bg); color: var(--warn); border-radius: 3px; padding: 0 3px; font-weight: 600; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+  h2 { font-size: 17px; margin: 0; }
+  .hidden { display: none; }
+  @media (max-width: 560px) { .seg { grid-template-columns: 1fr; } .text, .raw, .flags { grid-column: 1; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Hinglish Transcriber</h1>
+  <p class="sub">Upload a call recording and get a speaker-labelled, timestamped transcript. Click any line to hear that part.</p>
+
+  <section class="panel">
+    <div class="drop" id="drop">
+      <strong id="dropLabel">Drop an audio file here or click to choose</strong><br>
+      mp3, wav, m4a, ogg, flac
+      <input type="file" id="file" accept=".mp3,.wav,.m4a,.ogg,.flac,.aac,.opus,.webm,.mp4" hidden>
+    </div>
+    <div class="row">
+      <label>Hindi script
+        <select id="script"><option value="roman">Roman (kya hai)</option><option value="devanagari">Devanagari (क्या है)</option></select>
+      </label>
+      <label>Cleanup model
+        <select id="model">
+          <option value="">gemini-3.6-flash (default)</option>
+          <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (cheap, works when quota is out)</option>
+          <option value="gemini-4-argon">gemini-4-argon (best, needs billing)</option>
+        </select>
+      </label>
+      <label>Speakers
+        <input type="number" id="speakers" min="1" max="10" placeholder="auto" style="width:80px">
+      </label>
+      <label style="flex:1;min-width:180px">Names / terms to get right
+        <input type="text" id="keyterms" placeholder="Sharma Logistics, IFSC, UTR">
+      </label>
+      <label class="check"><input type="checkbox" id="cleanup" checked> LLM cleanup</label>
+    </div>
+    <div class="row">
+      <button class="primary" id="go" disabled>Transcribe</button>
+      <button class="secondary" id="sample">Try the sample call</button>
+    </div>
+    <div class="status" id="status"></div>
+  </section>
+
+  <section class="panel hidden" id="result">
+    <div class="stats" id="stats"></div>
+    <div class="dl" id="downloads"></div>
+    <audio id="player" controls preload="auto"></audio>
+    <p class="hint">Click a line to play from there. Highlighted lines are flagged for human review.</p>
+  </section>
+
+  <section class="panel hidden" id="transcriptPanel">
+    <div class="toolbar">
+      <h2>Transcript</h2>
+      <label class="check"><input type="checkbox" id="rawToggle"> Show raw STT under each line</label>
+    </div>
+    <div id="transcript"></div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let chosen = null, segments = [];
+
+const drop = $("drop"), fileInput = $("file");
+drop.onclick = () => fileInput.click();
+fileInput.onchange = () => pick(fileInput.files[0]);
+drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); pick(e.dataTransfer.files[0]); };
+
+function pick(f) {
+  if (!f) return;
+  chosen = f;
+  $("dropLabel").textContent = `${f.name} (${(f.size / 1048576).toFixed(1)} MB)`;
+  $("go").disabled = false;
+}
+
+$("go").onclick = () => submit(false);
+$("sample").onclick = () => submit(true);
+$("rawToggle").onchange = (e) => $("transcript").classList.toggle("showraw", e.target.checked);
+
+const fmt = (s) => { s = Math.round(s); return [Math.floor(s / 3600), Math.floor(s % 3600 / 60), s % 60].map((n) => String(n).padStart(2, "0")).join(":"); };
+const esc = (t) => (t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+async function submit(useSample) {
+  const fd = new FormData();
+  if (useSample) fd.append("use_sample", "true"); else fd.append("file", chosen);
+  fd.append("script", $("script").value);
+  fd.append("cleanup_model", $("model").value);
+  fd.append("cleanup", $("cleanup").checked ? "true" : "false");
+  if ($("speakers").value) fd.append("speakers", $("speakers").value);
+  fd.append("keyterms", $("keyterms").value);
+
+  setBusy(true);
+  const t0 = Date.now();
+  const tick = setInterval(() => {
+    $("status").textContent = `Working... ${Math.round((Date.now() - t0) / 1000)}s (clean-up, transcription, LLM pass). A 60-min call can take several minutes.`;
+  }, 500);
+  try {
+    const r = await fetch("/api/transcribe", { method: "POST", body: fd });
+    const data = await r.json().catch(() => ({ detail: `HTTP ${r.status}` }));
+    if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+    render(data);
+    $("status").textContent = `Done in ${Math.round((Date.now() - t0) / 1000)}s.`;
+  } catch (err) {
+    $("status").innerHTML = `<div class="error">${esc(err.message)}</div>`;
+  } finally {
+    clearInterval(tick);
+    setBusy(false);
+  }
+}
+
+function setBusy(b) {
+  $("go").disabled = b || !chosen;
+  $("sample").disabled = b;
+}
+
+function render(d) {
+  segments = d.segments;
+  const cost = d.cost || {};
+  const speakers = [...new Set(segments.map((s) => s.speaker))];
+  const failed = segments.filter((s) => (s.flags || []).some((f) => f.startsWith("cleanup_failed"))).length;
+  const stats = [
+    ["Duration", fmt(d.duration)],
+    ["Speakers", speakers.length],
+    ["Segments", segments.length],
+    ["Flagged", d.review.length],
+    ["STT", `${d.provider} / ${d.model}`],
+    ["Cleanup", d.meta.cleanup_model || "off"],
+    ["Cost", `$${(cost.total_usd ?? 0).toFixed(4)}`],
+    ["Time", `${cost.seconds?.total ?? "?"}s`],
+  ];
+  if (cost.wer) stats.push(["WER vs reference", `${(cost.wer.final * 100).toFixed(1)}%`]);
+  $("stats").innerHTML = stats.map(([k, v]) => `<span>${k}: <b>${esc(String(v))}</b></span>`).join("");
+  if (failed) $("stats").insertAdjacentHTML("beforeend",
+    `<div class="error" style="width:100%">LLM cleanup failed for ${failed} segment(s) (usually Gemini quota). Raw STT text is shown for those - try the flash-lite model.</div>`);
+
+  const labels = { json: "transcript.json", md: "transcript.md", txt: "transcript.txt", review: "review list" };
+  $("downloads").innerHTML = Object.entries(d.downloads).map(([k, u]) => `<a href="${u}" download>Download ${labels[k] || k}</a>`).join("");
+
+  $("player").src = d.audio_url;
+  const colors = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)"];
+  $("transcript").innerHTML = segments.map((s, i) => {
+    const flagged = (s.flags || []).length || (s.text || "").includes("[unclear]") || d.review.some((r) => r.id === s.id);
+    const reasons = (d.review.find((r) => r.id === s.id) || {}).reasons || [];
+    const color = colors[speakers.indexOf(s.speaker) % colors.length];
+    const text = esc(s.text).replaceAll("[unclear]", '<span class="unclear">[unclear]</span>');
+    const raw = s.raw_text && s.raw_text !== s.text ? `<div class="raw">raw: ${esc(s.raw_text)}</div>` : "";
+    return `<div class="seg${flagged ? " flagged" : ""}" data-i="${i}">
+      <div class="time">${fmt(s.start)}</div>
+      <div class="who" style="color:${color}">${esc(s.speaker)}${s.confidence != null ? ` <span class="time">conf ${s.confidence.toFixed(2)}</span>` : ""}</div>
+      <div class="text">${text}</div>${raw}
+      ${reasons.length ? `<div class="flags">${reasons.map(esc).join(" · ")}</div>` : ""}
+    </div>`;
+  }).join("");
+
+  $("transcript").querySelectorAll(".seg").forEach((el) => {
+    el.onclick = () => { const p = $("player"); p.currentTime = segments[+el.dataset.i].start; p.play(); };
+  });
+  $("result").classList.remove("hidden");
+  $("transcriptPanel").classList.remove("hidden");
+}
+
+$("player").ontimeupdate = () => {
+  const t = $("player").currentTime;
+  document.querySelectorAll(".seg").forEach((el) => {
+    const s = segments[+el.dataset.i];
+    el.classList.toggle("playing", t >= s.start && t < s.end);
+  });
+};
+</script>
+</body>
+</html>
