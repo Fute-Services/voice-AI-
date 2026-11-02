@@ -1,4 +1,4 @@
-"""Orchestrates: preprocess -> STT -> LLM cleanup -> outputs."""
+"""Orchestrates: preprocess -> STT -> LLM cleanup -> call analysis -> outputs."""
 from __future__ import annotations
 
 import logging
@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from .analysis import Analyzer
 from .cleanup import Cleaner
 from .config import Settings
 from .cost import CostTracker
@@ -24,6 +25,7 @@ class Result:
     cost: dict
     wer: dict | None
     seconds: float
+    analysis: dict | None = None
 
 
 async def run(src: Path, out_dir: Path, settings: Settings, reference: Path | None = None) -> Result:
@@ -55,6 +57,13 @@ async def run(src: Path, out_dir: Path, settings: Settings, reference: Path | No
         transcript.meta.update(cleanup_model=settings.cleanup_model, cleanup_chunks=n,
                                hindi_script=settings.hindi_script)
 
+    analysis = None
+    if settings.analysis:
+        with cost.timer("analysis"):
+            analysis = await Analyzer(settings, cost).analyze(transcript.segments)
+        log.info("analysis: %s (%s lead, %s confidence)", analysis["outcome"], analysis["lead_temperature"],
+                 analysis["confidence"])
+
     review = review_items(transcript, settings.low_confidence)
     wer_scores = None
     if reference:
@@ -64,6 +73,7 @@ async def run(src: Path, out_dir: Path, settings: Settings, reference: Path | No
 
     cost.timings["total"] = round(time.perf_counter() - t0, 2)
     summary = cost.summary()
-    paths = write_outputs(transcript, out_dir, stem, review, summary | ({"wer": wer_scores} if wer_scores else {}))
+    paths = write_outputs(transcript, out_dir, stem, review, summary | ({"wer": wer_scores} if wer_scores else {}),
+                          analysis)
     log.info("cost $%.4f, time %.1fs", summary["total_usd"], cost.timings["total"])
-    return Result(paths, review, summary, wer_scores, cost.timings["total"])
+    return Result(paths, review, summary, wer_scores, cost.timings["total"], analysis)

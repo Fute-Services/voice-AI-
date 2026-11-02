@@ -4,7 +4,7 @@ Audio file in → verbatim transcript with speaker labels and timestamps out
 (`.json`, `.md`, `.txt`), plus a review list of spots a human should check.
 
 ```
-audio ──ffmpeg──▶ 16 kHz mono WAV ──STT──▶ raw segments ──Gemini cleanup──▶ transcript + review list
+audio ──ffmpeg──▶ 16 kHz mono WAV ──STT──▶ raw segments ──Gemini cleanup──▶ transcript ──Gemini──▶ customer decision
         (normalise, light denoise)  (AssemblyAI      (listens to audio, fixes
                                      or Gemini)        misheard words; verbatim)
 ```
@@ -42,9 +42,37 @@ Useful flags:
 | `--provider gemini` | force an STT provider (`assemblyai` / `gemini`) |
 | `--cleanup-model gemini-4-argon` | best cleanup model (needs a billing-enabled key) |
 | `--no-cleanup` / `--no-denoise` | skip a stage |
+| `--no-analysis` | skip the customer decision step |
+| `--context "Projects: Green Valley, Sector 150"` | project/location/agent names to help the decision |
 | `--reference ref.txt` | compute word error rate against a reference |
 
 Every setting also has an env var; see `.env.example`.
+
+### Customer decision (real-estate calls)
+
+After transcription, Gemini reads the call and decides what the **customer** said:
+
+| outcome | meaning |
+|---|---|
+| `site_visit_scheduled` | agreed to a visit with a day/date fixed |
+| `interested` | wants details / brochure / visit, nothing fixed yet |
+| `follow_up` | no yes/no yet: "sochke batata hoon", "family se baat karke", "next week call karo" |
+| `not_interested` | declined, already bought, budget mismatch, don't call |
+| `wrong_number` | wrong person / not a lead / not a sales call |
+| `unclear` | too short, cut off, or can't tell |
+
+It also returns lead temperature (hot/warm/cold), confidence, a short summary, the next action,
+the follow-up day if given, requirements (budget, location, BHK, property type, purpose, timeline),
+objections, and 1-3 **evidence quotes** from the customer. Each quote is checked against the transcript.
+Quotes that aren't found are dropped. If nothing supports the decision, it is set to low confidence and
+marked `needs_review`.
+
+Re-run only the decision on existing transcripts (no new STT cost):
+
+```bash
+python analyze.py out/call.transcript.json
+python analyze.py "out/*.transcript.json" --context "Projects: Green Valley (Sector 150, Noida)"
+```
 
 ### Web UI
 
@@ -61,6 +89,7 @@ Runs are saved under `out/web/`.
 - `<name>.transcript.json`: `segments[]` with `id, speaker, start, end, text, confidence`, plus
   `raw_text` (STT before cleanup), `words[]` (word timestamps from STT), `flags`, `review`, `cost`
 - `<name>.transcript.md` / `.txt`: readable `[hh:mm:ss] Speaker N: text`
+- `<name>.analysis.json` / `.analysis.md`: the customer decision (also under `analysis` in the transcript JSON)
 - `<name>.review.md`: segments with `[unclear]`, low STT confidence, low-confidence words, or a rejected/failed cleanup
 - `<name>.work/`: original copy, 16 kHz WAV, FLAC, audio chunks
 

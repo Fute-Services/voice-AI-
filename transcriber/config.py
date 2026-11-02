@@ -56,6 +56,13 @@ class Settings:
     chunk_overlap_s: float = field(default_factory=lambda: float(_env("CHUNK_OVERLAP_S", "15")))
     max_concurrency: int = field(default_factory=lambda: int(_env("MAX_CONCURRENCY", "2")))
 
+    # Call outcome analysis (real-estate: interested / site visit / follow up / not interested ...)
+    analysis: bool = field(default_factory=lambda: _bool("ANALYSIS", True))
+    # Empty = same model as cleanup (falls back to CLEANUP_FALLBACK_MODEL on failure)
+    analysis_model: str = field(default_factory=lambda: os.getenv("ANALYSIS_MODEL", ""))
+    # Optional business context, e.g. "Projects: Green Valley (Sector 150, Noida), Skyline Towers"
+    analysis_context: str = field(default_factory=lambda: os.getenv("ANALYSIS_CONTEXT", ""))
+
     # Review
     low_confidence: float = field(default_factory=lambda: float(_env("LOW_CONFIDENCE", "0.6")))
 

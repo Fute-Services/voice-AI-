@@ -45,6 +45,8 @@ async def transcribe(
     cleanup: bool = Form(True),
     speakers: int | None = Form(None),
     keyterms: str = Form(""),
+    analysis: bool = Form(True),
+    context: str = Form(""),
 ):
     run_id = uuid.uuid4().hex[:10]
     run_dir = RUNS / run_id
@@ -72,6 +74,9 @@ async def transcribe(
         s.speakers_expected = speakers
     if keyterms.strip():
         s.keyterms = [t.strip() for t in keyterms.split(",") if t.strip()]
+    s.analysis = analysis
+    if context.strip():
+        s.analysis_context = context.strip()
 
     try:
         res = await run(src, run_dir, s, reference=SAMPLE.with_suffix(".reference.txt") if use_sample else None)
@@ -105,7 +110,8 @@ def audio(run_id: str):
 @app.get("/api/runs/{run_id}/file/{kind}")
 def download(run_id: str, kind: str):
     d = _run_dir(run_id)
-    ext = {"json": "transcript.json", "md": "transcript.md", "txt": "transcript.txt", "review": "review.md"}.get(kind)
+    ext = {"json": "transcript.json", "md": "transcript.md", "txt": "transcript.txt", "review": "review.md",
+           "analysis": "analysis.json", "analysis_md": "analysis.md"}.get(kind)
     match = next(d.glob(f"*.{ext}"), None) if ext else None
     if not match:
         raise HTTPException(404, "File not found")

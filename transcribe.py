@@ -27,6 +27,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--no-denoise", action="store_true", help="skip noise reduction (still normalises volume)")
     p.add_argument("--speakers", type=int, help="expected number of speakers (AssemblyAI)")
     p.add_argument("--keyterms", help="comma-separated names/jargon to bias STT, e.g. 'Sharma Logistics,IFSC'")
+    p.add_argument("--no-analysis", action="store_true", help="skip the call outcome analysis")
+    p.add_argument("--analysis-model", help="Gemini model for call analysis (default: cleanup model)")
+    p.add_argument("--context", help="business context for analysis, e.g. 'Projects: Green Valley, Sector 150 Noida'")
     p.add_argument("--reference", type=Path, help="reference transcript .txt to compute WER")
     p.add_argument("-v", "--verbose", action="store_true")
     return p.parse_args(argv)
@@ -46,9 +49,22 @@ def build_settings(a: argparse.Namespace) -> Settings:
         s.denoise = False
     if a.speakers:
         s.speakers_expected = a.speakers
+    if a.no_analysis:
+        s.analysis = False
+    if a.analysis_model:
+        s.analysis_model = a.analysis_model
+    if a.context:
+        s.analysis_context = a.context
     if a.keyterms:
         s.keyterms = [t.strip() for t in a.keyterms.split(",") if t.strip()]
     return s
+
+
+def print_analysis(a: dict) -> None:
+    print(f"\nOUTCOME: {a['outcome_label'].upper()}  ({a['lead_temperature']} lead, {a['confidence']} confidence)"
+          + ("  ** needs human review **" if a.get("needs_review") else ""))
+    print(f"  Why:  {a.get('reason', '')}")
+    print(f"  Next: {a.get('next_action', '')}" + (f"  [{a['follow_up_when']}]" if a.get("follow_up_when") else ""))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -74,6 +90,8 @@ def main(argv: list[str] | None = None) -> int:
     if res.wer:
         print(f"WER:  raw STT {res.wer['raw_stt']:.1%}  ->  final {res.wer['final']:.1%}")
     print(f"Review: {len(res.review)} segment(s) flagged -> {res.paths['review']}")
+    if res.analysis:
+        print_analysis(res.analysis)
     return 0
 
 

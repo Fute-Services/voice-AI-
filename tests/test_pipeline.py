@@ -15,6 +15,7 @@ import pytest
 
 from transcriber.cleanup import apply_edits, build_prompt, plan_chunks
 from transcriber.config import Settings
+from transcriber.cost import CostTracker
 from transcriber.models import Segment, Transcript, Word
 from transcriber.output import normalize_for_wer, relabel_speakers, review_items, wer, write_outputs
 from transcriber.providers.assemblyai import parse_utterances
@@ -127,6 +128,85 @@ def test_outputs_and_review(tmp_path):
 def test_wer_normalisation():
     assert normalize_for_wer("Rahul: Haan, boliye!\n[00:00:05] Speaker 2: OK [unclear]") == "haan boliye ok"
     assert wer("Rahul: haan boliye", "Speaker 1: Haan, boliye.") == 0
+
+
+# --- call analysis ----------------------------------------------------------
+
+def call_segments() -> list[Segment]:
+    return [Segment(0, "Speaker 1", 0, 6, "Namaste sir, main Neha bol rahi hoon Green Valley se, aapne 2 BHK ke liye enquiry ki thi."),
+            Segment(1, "Speaker 2", 6, 12, "Haan haan, budget mera 80 lakh tak hai, Noida mein chahiye."),
+            Segment(2, "Speaker 1", 12, 16, "Sir site visit ke liye aa sakte hain?"),
+            Segment(3, "Speaker 2", 16, 21, "Theek hai, Sunday ko 11 baje aa jaunga, family ke saath.")]
+
+
+def fake_analysis(**over) -> dict:
+    base = {"customer_speaker": "Speaker 2", "agent_speaker": "Speaker 1", "outcome": "site_visit_scheduled",
+            "lead_temperature": "hot", "confidence": "high", "reason": "Fixed a visit on Sunday.",
+            "summary": "Lead wants a 2 BHK in Noida under 80 lakh and booked a visit.",
+            "next_action": "Confirm Sunday 11 am visit on WhatsApp.", "follow_up_when": "Sunday 11 baje",
+            "requirements": {"budget": "80 lakh", "location": "Noida", "property_type": "", "bhk": "2 BHK",
+                             "purpose": "", "timeline": "", "other": ""},
+            "objections": [],
+            "evidence": [{"segment_id": 3, "quote": "Sunday ko 11 baje aa jaunga"}]}
+    return base | over
+
+
+def test_analysis_verify_keeps_real_quotes():
+    from transcriber.analysis import verify
+
+    a = verify(fake_analysis(evidence=[{"segment_id": 3, "quote": "sunday ko 11 baje aa jaunga,"},   # case/punct ok
+                                       {"segment_id": 0, "quote": "budget mera 80 lakh"},           # wrong id -> fixed
+                                       {"segment_id": 1, "quote": "main zaroor kharidunga"}]),      # invented
+               call_segments())
+    assert [e["segment_id"] for e in a["evidence"]] == [3, 1]
+    assert a["evidence"][0]["start"] == 16 and a["evidence"][0]["speaker"] == "Speaker 2"
+    assert a["confidence"] == "high" and not a["needs_review"]
+    assert a["outcome_label"] == "Site visit scheduled"
+    assert "1 evidence quote" in a["flags"][0]
+
+
+def test_analysis_verify_downgrades_unsupported_decision():
+    from transcriber.analysis import verify
+
+    a = verify(fake_analysis(evidence=[{"segment_id": 3, "quote": "haan main flat le lunga"}]), call_segments())
+    assert a["evidence"] == [] and a["confidence"] == "low" and a["needs_review"]
+
+
+def test_analyzer_with_fake_client_and_outputs(tmp_path):
+    from transcriber.analysis import Analyzer, build_prompt
+
+    class Resp:
+        text = json.dumps(fake_analysis())
+        usage_metadata = None
+
+    class Models:
+        async def generate_content(self, model, contents, config):
+            assert '"id": 3' in contents and "Sunday" in contents
+            assert "REAL ESTATE" in config.system_instruction and "Green Valley" in config.system_instruction
+            return Resp()
+
+    s = Settings()
+    s.gemini_api_key, s.analysis_context = "test", "Project: Green Valley"
+    an = Analyzer(s, CostTracker())
+    an.client = type("C", (), {"aio": type("A", (), {"models": Models()})()})()
+    a = asyncio.run(an.analyze(call_segments()))
+    assert a["outcome"] == "site_visit_scheduled" and a["evidence"] and not a["needs_review"]
+    assert build_prompt(call_segments()).startswith("TRANSCRIPT:")
+
+    t = Transcript(call_segments(), duration=21, provider="test", model="m")
+    paths = write_outputs(t, tmp_path, "x", [], {"total_usd": 0}, a)
+    assert json.loads(paths["json"].read_text(encoding="utf-8"))["analysis"]["outcome"] == "site_visit_scheduled"
+    md = paths["analysis_md"].read_text(encoding="utf-8")
+    assert "Site visit scheduled" in md and "Budget: 80 lakh" in md and "[00:00:16] Speaker 2" in md
+
+
+def test_analyzer_empty_transcript():
+    from transcriber.analysis import Analyzer
+
+    s = Settings()
+    s.gemini_api_key = "test"
+    a = asyncio.run(Analyzer(s, CostTracker()).analyze([]))
+    assert a["outcome"] == "unclear" and a["needs_review"]
 
 
 # --- integration ------------------------------------------------------------

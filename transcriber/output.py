@@ -42,7 +42,8 @@ def review_items(t: Transcript, low_conf: float, low_word_conf: float = 0.4) -> 
     return items
 
 
-def write_outputs(t: Transcript, out_dir: Path, stem: str, review: list[dict], cost: dict) -> dict[str, Path]:
+def write_outputs(t: Transcript, out_dir: Path, stem: str, review: list[dict], cost: dict,
+                  analysis: dict | None = None) -> dict[str, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     paths = {k: out_dir / f"{stem}.{ext}" for k, ext in
              (("json", "transcript.json"), ("md", "transcript.md"), ("txt", "transcript.txt"), ("review", "review.md"))}
@@ -50,6 +51,8 @@ def write_outputs(t: Transcript, out_dir: Path, stem: str, review: list[dict], c
     data = t.to_dict()
     data["review"] = review
     data["cost"] = cost
+    if analysis is not None:
+        data["analysis"] = analysis
     paths["json"].write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     header = [f"# Transcript: {stem}", "",
@@ -69,6 +72,14 @@ def write_outputs(t: Transcript, out_dir: Path, stem: str, review: list[dict], c
         if r["raw_text"] and r["raw_text"] != r["text"]:
             rv.append(f"  - raw STT: _{r['raw_text']}_")
     paths["review"].write_text("\n".join(rv) + "\n", encoding="utf-8")
+
+    if analysis is not None:
+        from .analysis import to_markdown
+
+        paths["analysis"] = out_dir / f"{stem}.analysis.json"
+        paths["analysis"].write_text(json.dumps(analysis, ensure_ascii=False, indent=2), encoding="utf-8")
+        paths["analysis_md"] = out_dir / f"{stem}.analysis.md"
+        paths["analysis_md"].write_text(to_markdown(analysis, stem), encoding="utf-8")
     return paths
 
 
