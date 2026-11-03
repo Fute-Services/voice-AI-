@@ -4,84 +4,177 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hinglish Transcriber</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f6f7f9; --panel: #fff; --text: #1b1f24; --muted: #5f6b7a; --border: #dde2e8;
-    --accent: #2457d6; --accent-text: #fff; --warn-bg: #fff4e0; --warn: #9a5b00; --err-bg: #fde8e8; --err: #a12020;
-    --s1: #2457d6; --s2: #b2470f; --s3: #127a4b; --s4: #7b3fb0; --active: #eef3ff;
-    --ok-bg: #e3f5ea; --ok: #0f6b3c; --mid-bg: #fff4e0; --mid: #9a5b00; --bad-bg: #fde8e8; --bad: #a12020; --none-bg: #eceff3; --none: #4a5563;
+    --bg: #f4f6fb; --panel: #ffffff; --panel-2: #f8f9fc; --text: #141821; --muted: #626d7e; --border: #e3e7ef;
+    --accent: #4f46e5; --accent-2: #7c3aed; --accent-soft: #eef0ff; --accent-text: #fff;
+    --warn-bg: #fff6e5; --warn: #9a5b00; --err-bg: #fdecec; --err: #b42318;
+    --s1: #4f46e5; --s2: #c2410c; --s3: #047857; --s4: #9333ea; --active: #eef0ff;
+    --ok-bg: #e4f6ec; --ok: #0f6b3c; --mid-bg: #fff4e0; --mid: #9a5b00; --bad-bg: #fde8e8; --bad: #b42318; --none-bg: #eef1f5; --none: #4a5563;
+    --shadow: 0 1px 2px rgba(16,24,40,.04), 0 4px 16px rgba(16,24,40,.06);
+    --radius: 14px;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #111418; --panel: #1a1e24; --text: #e6e9ee; --muted: #9aa5b3; --border: #2c323b;
-      --accent: #6d95ff; --accent-text: #0b0e12; --warn-bg: #3a2c12; --warn: #f2b45a; --err-bg: #3d1a1a; --err: #ff9b9b;
-      --s1: #7ea2ff; --s2: #ff9b63; --s3: #5fd29c; --s4: #c99bff; --active: #222b3d;
-      --ok-bg: #12301f; --ok: #6fdc9f; --mid-bg: #3a2c12; --mid: #f2b45a; --bad-bg: #3d1a1a; --bad: #ff9b9b; --none-bg: #252b33; --none: #b4bdc8;
+      --bg: #0d1016; --panel: #151a22; --panel-2: #1a202a; --text: #e8ebf1; --muted: #98a2b3; --border: #262d39;
+      --accent: #8b8cff; --accent-2: #b48cff; --accent-soft: #1f2340; --accent-text: #0b0e14;
+      --warn-bg: #33270f; --warn: #f2b45a; --err-bg: #3a1818; --err: #ff9b9b;
+      --s1: #9ea6ff; --s2: #ff9b63; --s3: #5fd29c; --s4: #d0a4ff; --active: #1f2440;
+      --ok-bg: #12301f; --ok: #6fdc9f; --mid-bg: #33270f; --mid: #f2b45a; --bad-bg: #3a1818; --bad: #ff9b9b; --none-bg: #232a34; --none: #b4bdc8;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 18px rgba(0,0,0,.25);
     }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
-  .sub { color: var(--muted); margin: 0 0 20px; }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
-  .drop { border: 2px dashed var(--border); border-radius: 8px; padding: 22px; text-align: center; cursor: pointer; color: var(--muted); }
-  .drop.over, .drop:hover { border-color: var(--accent); }
-  .drop strong { color: var(--text); }
-  .row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; align-items: end; }
-  label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
-  select, input[type=text], input[type=number] { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); min-width: 0; }
-  .check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); }
-  button { font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 6px; border: 1px solid var(--accent); cursor: pointer; }
-  .primary { background: var(--accent); color: var(--accent-text); }
-  .secondary { background: transparent; color: var(--accent); }
-  button:disabled { opacity: .5; cursor: wait; }
-  .status { margin-top: 12px; color: var(--muted); min-height: 1.5em; }
-  .error { background: var(--err-bg); color: var(--err); padding: 10px 12px; border-radius: 6px; white-space: pre-wrap; word-break: break-word; }
-  .stats { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 14px; color: var(--muted); }
-  .stats b { color: var(--text); font-variant-numeric: tabular-nums; }
-  .dl { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
-  .dl a { color: var(--accent); font-size: 14px; }
-  audio { width: 100%; margin: 12px 0 4px; }
-  .hint { font-size: 13px; color: var(--muted); margin: 0; }
-  .seg { display: grid; grid-template-columns: 74px 1fr; gap: 4px 12px; padding: 10px 8px; border-radius: 6px; cursor: pointer; border-left: 3px solid transparent; }
-  .seg:hover { background: var(--active); }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  main { max-width: 1040px; margin: 0 auto; padding: 0 16px 80px; }
+
+  /* Header */
+  header { padding: 32px 0 22px; display: flex; align-items: center; gap: 14px; }
+  .logo { width: 44px; height: 44px; border-radius: 12px; flex: none; display: grid; place-items: center;
+          background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; box-shadow: var(--shadow); }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 2px 0 0; font-size: 14px; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 18px; box-shadow: var(--shadow); }
+  h2 { font-size: 16px; margin: 0; letter-spacing: -.005em; display: flex; align-items: center; gap: 8px; }
+  .section-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+
+  /* Dropzone */
+  .drop { border: 2px dashed var(--border); border-radius: 12px; padding: 28px 16px; text-align: center; cursor: pointer; color: var(--muted);
+          background: var(--panel-2); transition: border-color .15s, background .15s; }
+  .drop.over, .drop:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .drop.has-file { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+  .drop svg { color: var(--accent); margin-bottom: 6px; }
+  .drop strong { color: var(--text); display: block; font-size: 15px; overflow-wrap: anywhere; }
+  .drop small { font-size: 13px; }
+
+  /* Form */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-top: 16px; }
+  .wide { grid-column: 1 / -1; }
+  label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; color: var(--muted); }
+  select, input[type=text], input[type=number] { font: inherit; font-size: 14px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 9px;
+          background: var(--panel); color: var(--text); min-width: 0; width: 100%; transition: border-color .15s, box-shadow .15s; }
+  select:focus, input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .toggles { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .check { flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-weight: 500; font-size: 14px;
+           padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; background: var(--panel-2); user-select: none; }
+  .check:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  .check input { accent-color: var(--accent); margin: 0; }
+  details { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+  summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--muted); list-style: none; display: flex; align-items: center; gap: 6px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "›"; display: inline-block; transition: transform .15s; font-size: 18px; line-height: 1; }
+  details[open] summary::before { transform: rotate(90deg); }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; align-items: center; }
+  button { font: inherit; font-size: 14px; font-weight: 600; padding: 10px 18px; border-radius: 10px; border: 1px solid transparent; cursor: pointer;
+           display: inline-flex; align-items: center; gap: 8px; transition: transform .05s, filter .15s, background .15s; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  .primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; }
+  .primary:hover:not(:disabled) { filter: brightness(1.08); }
+  .secondary { background: transparent; color: var(--accent); border-color: var(--border); }
+  .secondary:hover:not(:disabled) { background: var(--accent-soft); }
+  .ghost { background: transparent; color: var(--muted); border-color: var(--border); padding: 6px 12px; font-size: 13px; }
+  .ghost:hover { color: var(--text); background: var(--panel-2); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+
+  .status { margin-top: 14px; color: var(--muted); font-size: 14px; min-height: 1.5em; display: flex; align-items: center; gap: 10px; }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error { background: var(--err-bg); color: var(--err); padding: 10px 12px; border-radius: 9px; white-space: pre-wrap; word-break: break-word; width: 100%; font-size: 14px; }
+
+  /* Stats */
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+  .stat { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+  .stat span { display: block; font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .04em; }
+  .stat b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; margin-top: 2px; }
+  .stats .error { grid-column: 1 / -1; }
+  .dl { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .dl a { color: var(--accent); font-size: 13px; font-weight: 600; text-decoration: none; padding: 6px 12px; border: 1px solid var(--border);
+          border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; background: var(--panel); }
+  .dl a:hover { background: var(--accent-soft); border-color: var(--accent); }
+
+  /* Player */
+  .player-wrap { position: sticky; top: 0; z-index: 5; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+                 padding: 12px 16px; margin-bottom: 18px; box-shadow: var(--shadow); }
+  audio { width: 100%; display: block; }
+  .hint { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+
+  /* Transcript */
+  .tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .search { width: 220px; max-width: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .legend span { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); }
+  .seg { display: grid; grid-template-columns: 36px 1fr; gap: 2px 12px; padding: 10px; border-radius: 10px; cursor: pointer; border-left: 3px solid transparent; transition: background .12s; }
+  .seg + .seg { margin-top: 2px; }
+  .seg:hover { background: var(--panel-2); }
   .seg.playing { background: var(--active); border-left-color: var(--accent); }
   .seg.flagged { background: var(--warn-bg); }
-  .time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; padding-top: 2px; }
+  .seg.flagged.playing { border-left-color: var(--warn); }
+  .seg.dim { display: none; }
+  .avatar { grid-row: span 4; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; margin-top: 2px; }
+  .meta { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
   .who { font-weight: 600; font-size: 13px; }
-  .text { grid-column: 2; overflow-wrap: anywhere; }
-  .raw { grid-column: 2; font-size: 13px; color: var(--muted); display: none; overflow-wrap: anywhere; }
+  .text { overflow-wrap: anywhere; grid-column: 2; }
+  .raw { grid-column: 2; font-size: 13px; color: var(--muted); display: none; overflow-wrap: anywhere; font-style: italic; }
   .showraw .raw { display: block; }
-  .flags { grid-column: 2; font-size: 12px; color: var(--warn); }
-  .unclear { background: var(--warn-bg); color: var(--warn); border-radius: 3px; padding: 0 3px; font-weight: 600; }
-  .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
-  h2 { font-size: 17px; margin: 0; }
-  .hidden { display: none; }
-  .verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
-  .badge { font-weight: 700; font-size: 18px; padding: 6px 14px; border-radius: 999px; }
-  .chip { font-size: 13px; padding: 2px 10px; border-radius: 999px; background: var(--none-bg); color: var(--none); }
+  .flags { grid-column: 2; font-size: 12px; color: var(--warn); font-weight: 500; }
+  .unclear { background: var(--warn-bg); color: var(--warn); border-radius: 4px; padding: 0 4px; font-weight: 600; }
+  mark { background: #fde68a; color: inherit; border-radius: 3px; padding: 0 1px; }
+  @media (prefers-color-scheme: dark) { mark { background: #6b5a1a; } }
+  .empty { color: var(--muted); font-size: 14px; padding: 12px; text-align: center; }
+  .hidden { display: none !important; }
+
+  /* Analysis */
+  .verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .badge { font-weight: 700; font-size: 18px; padding: 8px 16px; border-radius: 999px; }
+  .chip { font-size: 13px; font-weight: 500; padding: 3px 11px; border-radius: 999px; background: var(--none-bg); color: var(--none); }
   .t-ok { background: var(--ok-bg); color: var(--ok); } .t-mid { background: var(--mid-bg); color: var(--mid); }
   .t-bad { background: var(--bad-bg); color: var(--bad); } .t-none { background: var(--none-bg); color: var(--none); }
-  .kv { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; margin: 8px 0; }
-  .kv dt { color: var(--muted); font-size: 13px; padding-top: 1px; } .kv dd { margin: 0; overflow-wrap: anywhere; }
-  .quote { cursor: pointer; display: block; padding: 4px 0; } .quote:hover { color: var(--accent); }
-  @media (max-width: 560px) { .kv { grid-template-columns: 1fr; } .kv dd { margin-bottom: 6px; } }
-  @media (max-width: 560px) { .seg { grid-template-columns: 1fr; } .text, .raw, .flags { grid-column: 1; } }
+  .kv { display: grid; grid-template-columns: 130px 1fr; gap: 0; margin: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .kv dt, .kv dd { padding: 10px 14px; border-top: 1px solid var(--border); }
+  .kv dt:first-of-type, .kv dt:first-of-type + dd { border-top: 0; }
+  .kv dt { color: var(--muted); font-size: 13px; font-weight: 500; background: var(--panel-2); }
+  .kv dd { margin: 0; overflow-wrap: anywhere; }
+  .quote { cursor: pointer; display: block; padding: 6px 10px; margin: 4px 0; border-left: 3px solid var(--accent); background: var(--panel-2); border-radius: 0 8px 8px 0; font-size: 14px; }
+  .quote:hover { background: var(--accent-soft); }
+  .quote .time { margin-right: 4px; }
+
+  @media (max-width: 560px) {
+    header { padding-top: 22px; }
+    .kv { grid-template-columns: 1fr; }
+    .kv dd { border-top: 0; padding-top: 0; }
+    .kv dt { background: transparent; padding-bottom: 4px; }
+    .search { width: 100%; }
+    .tools { width: 100%; }
+  }
 </style>
 </head>
 <body>
 <main>
-  <h1>Hinglish Transcriber</h1>
-  <p class="sub">Upload a call recording and get a speaker-labelled, timestamped transcript. Click any line to hear that part.</p>
+  <header>
+    <div class="logo" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4"/></svg>
+    </div>
+    <div>
+      <h1>Hinglish Transcriber</h1>
+      <p class="sub">Speaker-labelled, timestamped transcripts and call outcome for real-estate calls.</p>
+    </div>
+  </header>
 
   <section class="panel">
     <div class="drop" id="drop">
-      <strong id="dropLabel">Drop an audio file here or click to choose</strong><br>
-      mp3, wav, m4a, ogg, flac
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+      <strong id="dropLabel">Drop an audio file here or click to choose</strong>
+      <small>mp3, wav, m4a, ogg, flac, aac, opus</small>
       <input type="file" id="file" accept=".mp3,.wav,.m4a,.ogg,.flac,.aac,.opus,.webm,.mp4" hidden>
     </div>
-    <div class="row">
+
+    <div class="grid">
       <label>Hindi script
         <select id="script"><option value="roman">Roman (kya hai)</option><option value="devanagari">Devanagari (क्या है)</option></select>
       </label>
@@ -93,50 +186,72 @@
         </select>
       </label>
       <label>Speakers
-        <input type="number" id="speakers" min="1" max="10" placeholder="auto" style="width:80px">
+        <input type="number" id="speakers" min="1" max="10" placeholder="Auto-detect">
       </label>
-      <label style="flex:1;min-width:180px">Names / terms to get right
-        <input type="text" id="keyterms" placeholder="Sharma Logistics, IFSC, UTR">
-      </label>
+    </div>
+
+    <div class="toggles">
       <label class="check"><input type="checkbox" id="cleanup" checked> LLM cleanup</label>
       <label class="check"><input type="checkbox" id="analysis" checked> Decide outcome</label>
     </div>
-    <div class="row">
-      <label style="flex:1;min-width:220px">Business context for the decision (optional)
-        <input type="text" id="context" placeholder="Projects: Green Valley (Sector 150, Noida), Skyline Towers; agents: Rahul, Neha">
-      </label>
-    </div>
-    <div class="row">
-      <button class="primary" id="go" disabled>Transcribe</button>
+
+    <details>
+      <summary>Advanced: names, terms &amp; business context</summary>
+      <div class="grid">
+        <label class="wide">Names / terms to get right
+          <input type="text" id="keyterms" placeholder="Sharma Logistics, IFSC, UTR">
+        </label>
+        <label class="wide">Business context for the decision (optional)
+          <input type="text" id="context" placeholder="Projects: Green Valley (Sector 150, Noida), Skyline Towers; agents: Rahul, Neha">
+        </label>
+      </div>
+    </details>
+
+    <div class="actions">
+      <button class="primary" id="go" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        Transcribe
+      </button>
       <button class="secondary" id="sample">Try the sample call</button>
     </div>
     <div class="status" id="status"></div>
   </section>
 
   <section class="panel hidden" id="analysisPanel">
-    <h2 style="margin-bottom:10px">Customer decision</h2>
+    <div class="section-head"><h2>Customer decision</h2></div>
     <div id="analysis"></div>
   </section>
 
   <section class="panel hidden" id="result">
+    <div class="section-head"><h2>Run details</h2></div>
     <div class="stats" id="stats"></div>
     <div class="dl" id="downloads"></div>
-    <audio id="player" controls preload="auto"></audio>
-    <p class="hint">Click a line to play from there. Highlighted lines are flagged for human review.</p>
   </section>
 
+  <div class="player-wrap hidden" id="playerWrap">
+    <audio id="player" controls preload="auto"></audio>
+    <p class="hint">Click any line to play from there. Highlighted lines are flagged for human review.</p>
+  </div>
+
   <section class="panel hidden" id="transcriptPanel">
-    <div class="toolbar">
+    <div class="section-head">
       <h2>Transcript</h2>
-      <label class="check"><input type="checkbox" id="rawToggle"> Show raw STT under each line</label>
+      <div class="tools">
+        <input type="text" id="search" class="search" placeholder="Search transcript…">
+        <label class="check"><input type="checkbox" id="followToggle" checked> Follow audio</label>
+        <label class="check"><input type="checkbox" id="rawToggle"> Raw STT</label>
+        <button class="ghost" id="copyBtn">Copy</button>
+      </div>
     </div>
+    <div class="legend" id="legend"></div>
     <div id="transcript"></div>
+    <div class="empty hidden" id="noMatch">No lines match your search.</div>
   </section>
 </main>
 
 <script>
 const $ = (id) => document.getElementById(id);
-let chosen = null, segments = [];
+let chosen = null, segments = [], lastPlaying = -1;
 
 const drop = $("drop"), fileInput = $("file");
 drop.onclick = () => fileInput.click();
@@ -149,15 +264,24 @@ function pick(f) {
   if (!f) return;
   chosen = f;
   $("dropLabel").textContent = `${f.name} (${(f.size / 1048576).toFixed(1)} MB)`;
+  drop.classList.add("has-file");
   $("go").disabled = false;
 }
 
 $("go").onclick = () => submit(false);
 $("sample").onclick = () => submit(true);
 $("rawToggle").onchange = (e) => $("transcript").classList.toggle("showraw", e.target.checked);
+$("search").oninput = () => applySearch();
+$("copyBtn").onclick = async () => {
+  const txt = segments.map((s) => `[${fmt(s.start)}] ${s.speaker}: ${s.text}`).join("\n");
+  try { await navigator.clipboard.writeText(txt); $("copyBtn").textContent = "Copied ✓"; }
+  catch { $("copyBtn").textContent = "Copy failed"; }
+  setTimeout(() => ($("copyBtn").textContent = "Copy"), 1500);
+};
 
 const fmt = (s) => { s = Math.round(s); return [Math.floor(s / 3600), Math.floor(s % 3600 / 60), s % 60].map((n) => String(n).padStart(2, "0")).join(":"); };
 const esc = (t) => (t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const initials = (name) => String(name).replace(/speaker\s*/i, "").trim().slice(0, 2).toUpperCase() || "?";
 
 async function submit(useSample) {
   const fd = new FormData();
@@ -172,19 +296,22 @@ async function submit(useSample) {
 
   setBusy(true);
   const t0 = Date.now();
-  const tick = setInterval(() => {
-    $("status").textContent = `Working... ${Math.round((Date.now() - t0) / 1000)}s (clean-up, transcription, LLM pass). A 60-min call can take several minutes.`;
-  }, 500);
+  const update = () => {
+    $("status").innerHTML = `<span class="spinner"></span><span>Working… ${Math.round((Date.now() - t0) / 1000)}s — cleaning audio, transcribing, LLM pass. A 60-min call can take several minutes.</span>`;
+  };
+  update();
+  const tick = setInterval(update, 500);
   try {
     const r = await fetch("/api/transcribe", { method: "POST", body: fd });
     const data = await r.json().catch(() => ({ detail: `HTTP ${r.status}` }));
     if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+    clearInterval(tick);
     render(data);
-    $("status").textContent = `Done in ${Math.round((Date.now() - t0) / 1000)}s.`;
+    $("status").textContent = `✓ Done in ${Math.round((Date.now() - t0) / 1000)}s.`;
   } catch (err) {
+    clearInterval(tick);
     $("status").innerHTML = `<div class="error">${esc(err.message)}</div>`;
   } finally {
-    clearInterval(tick);
     setBusy(false);
   }
 }
@@ -194,8 +321,11 @@ function setBusy(b) {
   $("sample").disabled = b;
 }
 
+const COLORS = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)"];
+
 function render(d) {
   segments = d.segments;
+  lastPlaying = -1;
   const cost = d.cost || {};
   const speakers = [...new Set(segments.map((s) => s.speaker))];
   const failed = segments.filter((s) => (s.flags || []).some((f) => f.startsWith("cleanup_failed"))).length;
@@ -209,37 +339,66 @@ function render(d) {
     ["Cost", `$${(cost.total_usd ?? 0).toFixed(4)}`],
     ["Time", `${cost.seconds?.total ?? "?"}s`],
   ];
-  if (cost.wer) stats.push(["WER vs reference", `${(cost.wer.final * 100).toFixed(1)}%`]);
-  $("stats").innerHTML = stats.map(([k, v]) => `<span>${k}: <b>${esc(String(v))}</b></span>`).join("");
+  if (cost.wer) stats.push(["WER vs ref", `${(cost.wer.final * 100).toFixed(1)}%`]);
+  $("stats").innerHTML = stats.map(([k, v]) => `<div class="stat"><span>${k}</span><b>${esc(String(v))}</b></div>`).join("");
   if (failed) $("stats").insertAdjacentHTML("beforeend",
-    `<div class="error" style="width:100%">LLM cleanup failed for ${failed} segment(s) (usually Gemini quota). Raw STT text is shown for those - try the flash-lite model.</div>`);
+    `<div class="error">LLM cleanup failed for ${failed} segment(s) (usually Gemini quota). Raw STT text is shown for those — try the flash-lite model.</div>`);
 
   renderAnalysis(d.analysis);
   const labels = { json: "transcript.json", md: "transcript.md", txt: "transcript.txt", review: "review list",
                    analysis: "analysis.json", analysis_md: "analysis.md" };
-  $("downloads").innerHTML = Object.entries(d.downloads).map(([k, u]) => `<a href="${u}" download>Download ${labels[k] || k}</a>`).join("");
+  const dlIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg>';
+  $("downloads").innerHTML = Object.entries(d.downloads).map(([k, u]) => `<a href="${u}" download>${dlIcon}${labels[k] || k}</a>`).join("");
 
   $("player").src = d.audio_url;
-  const colors = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)"];
+  $("legend").innerHTML = speakers.map((sp, i) =>
+    `<span style="color:${COLORS[i % COLORS.length]}">● ${esc(sp)}</span>`).join("");
   $("transcript").innerHTML = segments.map((s, i) => {
     const flagged = (s.flags || []).length || (s.text || "").includes("[unclear]") || d.review.some((r) => r.id === s.id);
     const reasons = (d.review.find((r) => r.id === s.id) || {}).reasons || [];
-    const color = colors[speakers.indexOf(s.speaker) % colors.length];
-    const text = esc(s.text).replaceAll("[unclear]", '<span class="unclear">[unclear]</span>');
+    const color = COLORS[speakers.indexOf(s.speaker) % COLORS.length];
     const raw = s.raw_text && s.raw_text !== s.text ? `<div class="raw">raw: ${esc(s.raw_text)}</div>` : "";
     return `<div class="seg${flagged ? " flagged" : ""}" data-i="${i}">
-      <div class="time">${fmt(s.start)}</div>
-      <div class="who" style="color:${color}">${esc(s.speaker)}${s.confidence != null ? ` <span class="time">conf ${s.confidence.toFixed(2)}</span>` : ""}</div>
-      <div class="text">${text}</div>${raw}
-      ${reasons.length ? `<div class="flags">${reasons.map(esc).join(" · ")}</div>` : ""}
+      <div class="avatar" style="background:${color}">${esc(initials(s.speaker))}</div>
+      <div class="meta"><span class="who" style="color:${color}">${esc(s.speaker)}</span>
+        <span class="time">${fmt(s.start)}</span>
+        ${s.confidence != null ? `<span class="time">· conf ${s.confidence.toFixed(2)}</span>` : ""}</div>
+      <div class="text">${textHtml(s.text, "")}</div>${raw}
+      ${reasons.length ? `<div class="flags">⚑ ${reasons.map(esc).join(" · ")}</div>` : ""}
     </div>`;
   }).join("");
 
   $("transcript").querySelectorAll(".seg").forEach((el) => {
     el.onclick = () => { const p = $("player"); p.currentTime = segments[+el.dataset.i].start; p.play(); };
   });
+  $("search").value = "";
+  applySearch();
   $("result").classList.remove("hidden");
+  $("playerWrap").classList.remove("hidden");
   $("transcriptPanel").classList.remove("hidden");
+  ($("analysisPanel").classList.contains("hidden") ? $("result") : $("analysisPanel")).scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function textHtml(text, q) {
+  let h = esc(text);
+  if (q) {
+    const re = new RegExp(esc(q).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    h = h.replace(re, (m) => `<mark>${m}</mark>`);
+  }
+  return h.replaceAll("[unclear]", '<span class="unclear">[unclear]</span>');
+}
+
+function applySearch() {
+  const q = $("search").value.trim();
+  let shown = 0;
+  $("transcript").querySelectorAll(".seg").forEach((el) => {
+    const s = segments[+el.dataset.i];
+    const hit = !q || (s.text || "").toLowerCase().includes(q.toLowerCase()) || String(s.speaker).toLowerCase().includes(q.toLowerCase());
+    el.classList.toggle("dim", !hit);
+    el.querySelector(".text").innerHTML = textHtml(s.text, q);
+    if (hit) shown++;
+  });
+  $("noMatch").classList.toggle("hidden", shown > 0 || !segments.length);
 }
 
 const TONE = { site_visit_scheduled: "t-ok", interested: "t-ok", follow_up: "t-mid", not_interested: "t-bad",
@@ -256,7 +415,7 @@ function renderAnalysis(a) {
     ["Objections", (a.objections || []).join(" · ")],
   ].filter(([, v]) => v);
   const ev = (a.evidence || []).map((e) =>
-    `<span class="quote" data-t="${e.start}">[${fmt(e.start)}] ${esc(e.speaker)}: “${esc(e.quote)}”</span>`).join("");
+    `<span class="quote" data-t="${e.start}"><span class="time">${fmt(e.start)}</span> <b>${esc(e.speaker)}:</b> “${esc(e.quote)}”</span>`).join("");
   $("analysis").innerHTML = `
     <div class="verdict">
       <span class="badge ${TONE[a.outcome] || "t-none"}">${esc(a.outcome_label)}</span>
@@ -276,10 +435,19 @@ function renderAnalysis(a) {
 
 $("player").ontimeupdate = () => {
   const t = $("player").currentTime;
+  let cur = -1;
   document.querySelectorAll(".seg").forEach((el) => {
-    const s = segments[+el.dataset.i];
-    el.classList.toggle("playing", t >= s.start && t < s.end);
+    const i = +el.dataset.i, s = segments[i];
+    const on = t >= s.start && t < s.end;
+    el.classList.toggle("playing", on);
+    if (on) cur = i;
   });
+  if (cur !== -1 && cur !== lastPlaying) {
+    lastPlaying = cur;
+    if ($("followToggle").checked && !$("player").paused) {
+      document.querySelector(`.seg[data-i="${cur}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }
 };
 </script>
 </body>
