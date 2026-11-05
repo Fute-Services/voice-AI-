@@ -4,16 +4,19 @@
 """
 from __future__ import annotations
 
+import base64
 import json
 import logging
+import os
 import re
+import secrets
 import shutil
 import uuid
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, Response
 
 from transcriber.config import ConfigError, Settings
 from transcriber.pipeline import run
@@ -29,6 +32,30 @@ for noisy in ("httpx", "httpcore", "google_genai"):
     logging.getLogger(noisy).setLevel(logging.WARNING)
 
 app = FastAPI(title="Hinglish Transcriber")
+
+# Set APP_PASSWORD when hosting publicly, otherwise anyone with the URL spends your API credits.
+APP_USER = os.getenv("APP_USER", "admin")
+APP_PASSWORD = os.getenv("APP_PASSWORD", "")
+
+
+@app.middleware("http")
+async def basic_auth(request: Request, call_next):
+    if not APP_PASSWORD or request.url.path == "/healthz":
+        return await call_next(request)
+    header = request.headers.get("authorization", "")
+    if header.startswith("Basic "):
+        try:
+            user, _, pwd = base64.b64decode(header[6:]).decode().partition(":")
+        except Exception:
+            user = pwd = ""
+        if secrets.compare_digest(user, APP_USER) and secrets.compare_digest(pwd, APP_PASSWORD):
+            return await call_next(request)
+    return Response("Login required", 401, {"WWW-Authenticate": 'Basic realm="transcriber"'})
+
+
+@app.get("/healthz")
+def healthz() -> dict:
+    return {"ok": True}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -119,4 +146,4 @@ def download(run_id: str, kind: str):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", "8000")))

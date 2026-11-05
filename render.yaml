@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: voice-ai
+    runtime: docker
+    plan: starter
+    healthCheckPath: /healthz
+    envVars:
+      - key: ASSEMBLYAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
