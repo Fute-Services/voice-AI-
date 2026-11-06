@@ -2,7 +2,7 @@ services:
   - type: web
     name: voice-ai
     runtime: docker
-    plan: starter
+    plan: free
     healthCheckPath: /healthz
     envVars:
       - key: ASSEMBLYAI_API_KEY
