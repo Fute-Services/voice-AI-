@@ -1,9 +1,11 @@
-google-genai>=2.33
-httpx>=0.28
-python-dotenv>=1.0
-tenacity>=9.0
-jiwer>=4.0
-fastapi>=0.115
-uvicorn>=0.30
-python-multipart>=0.0.9
-pytest>=8.0
+# Pinned to versions verified locally. google-genai 3.x breaks Gemini transcription
+# ("Unknown name audioTranscriptionConfig"), so stay on 2.33 until that is fixed.
+google-genai==2.33.0
+httpx==0.28.1
+python-dotenv==1.2.4
+tenacity==9.1.4
+jiwer==4.0.0
+fastapi==0.162.0
+uvicorn==0.54.0
+python-multipart==0.0.32
+pytest==9.2.0
