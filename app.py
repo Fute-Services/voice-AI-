@@ -34,8 +34,9 @@ for noisy in ("httpx", "httpcore", "google_genai"):
 app = FastAPI(title="Hinglish Transcriber")
 
 # Set APP_PASSWORD when hosting publicly, otherwise anyone with the URL spends your API credits.
-APP_USER = os.getenv("APP_USER", "admin")
-APP_PASSWORD = os.getenv("APP_PASSWORD", "")
+# Stripped because dashboard textareas (e.g. Render) easily save a trailing space/newline.
+APP_USER = os.getenv("APP_USER", "admin").strip().lower()
+APP_PASSWORD = os.getenv("APP_PASSWORD", "").strip()
 
 
 @app.middleware("http")
@@ -48,7 +49,9 @@ async def basic_auth(request: Request, call_next):
             user, _, pwd = base64.b64decode(header[6:]).decode().partition(":")
         except Exception:
             user = pwd = ""
-        if secrets.compare_digest(user, APP_USER) and secrets.compare_digest(pwd, APP_PASSWORD):
+        user, pwd = user.strip().lower(), pwd.strip()
+        if secrets.compare_digest(user.encode(), APP_USER.encode()) and \
+                secrets.compare_digest(pwd.encode(), APP_PASSWORD.encode()):
             return await call_next(request)
     return Response("Login required", 401, {"WWW-Authenticate": 'Basic realm="transcriber"'})
 
