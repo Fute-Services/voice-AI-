@@ -13,7 +13,7 @@
     --bg: #f5f5f7; --surface: #ffffff; --surface-2: #fbfbfd; --surface-3: rgba(120,120,128,.12);
     --text: #1d1d1f; --text-2: #424245; --muted: #6e6e73; --faint: #86868b;
     --border: rgba(0,0,0,.08); --border-strong: rgba(0,0,0,.14); --hair: rgba(60,60,67,.12);
-    --accent: #0071e3; --accent-hover: #0077ed; --accent-soft: rgba(0,113,227,.08); --accent-ring: rgba(0,113,227,.28);
+    --accent: #4f46e5; --accent-hover: #4338ca; --accent-soft: rgba(79,70,229,.08); --accent-ring: rgba(79,70,229,.28);
     --ok: #1d8a3a; --ok-bg: rgba(52,199,89,.12); --ok-bd: transparent;
     --mid: #b35c00; --mid-bg: rgba(255,149,0,.13); --mid-bd: transparent;
     --bad: #d70015; --bad-bg: rgba(255,59,48,.10); --bad-bd: transparent;
@@ -34,7 +34,7 @@
       --bg: #000000; --surface: #1c1c1e; --surface-2: #232325; --surface-3: rgba(118,118,128,.24);
       --text: #f5f5f7; --text-2: #d2d2d7; --muted: #98989d; --faint: #6e6e73;
       --border: rgba(255,255,255,.08); --border-strong: rgba(255,255,255,.16); --hair: rgba(84,84,88,.5);
-      --accent: #0a84ff; --accent-hover: #409cff; --accent-soft: rgba(10,132,255,.16); --accent-ring: rgba(10,132,255,.4);
+      --accent: #6366f1; --accent-hover: #7c7ff7; --accent-soft: rgba(99,102,241,.18); --accent-ring: rgba(99,102,241,.4);
       --ok: #30d158; --ok-bg: rgba(48,209,88,.16);
       --mid: #ff9f0a; --mid-bg: rgba(255,159,10,.16);
       --bad: #ff453a; --bad-bg: rgba(255,69,58,.16);
@@ -61,7 +61,7 @@
   .topbar-in { max-width: 1320px; margin: 0 auto; height: 100%; padding: 0 28px; display: flex; align-items: center; gap: 12px; }
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; letter-spacing: -.022em; }
   .brand-mark { width: 30px; height: 30px; border-radius: 8px; color: #fff; display: grid; place-items: center;
-                background: linear-gradient(160deg, #2997ff, #0050c8); box-shadow: inset 0 1px 0 rgba(255,255,255,.25); }
+                background: linear-gradient(160deg, #818cf8, #4338ca); box-shadow: inset 0 1px 0 rgba(255,255,255,.25); }
   .brand small { color: var(--muted); font-weight: 400; font-size: 14px; letter-spacing: -.01em; }
   .spacer { flex: 1; }
   .env { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 500; color: var(--muted);
@@ -92,7 +92,7 @@
   .drop strong em { font-style: normal; color: var(--accent); }
   .drop small { display: block; color: var(--faint); font-size: 12px; margin-top: 4px; }
   .file-chip { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); }
-  .file-chip .fi { width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(160deg, #2997ff, #0050c8); color: #fff; display: grid; place-items: center; }
+  .file-chip .fi { width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(160deg, #818cf8, #4338ca); color: #fff; display: grid; place-items: center; }
   .file-chip .fn { min-width: 0; flex: 1; }
   .file-chip .fn b { display: block; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .file-chip .fn span { color: var(--muted); font-size: 13px; }
@@ -161,7 +161,7 @@
   /* ---------- Empty / progress ---------- */
   .empty-state { padding: 80px 32px; text-align: center; }
   .empty-state .ei { width: 64px; height: 64px; margin: 0 auto 20px; border-radius: 18px; display: grid; place-items: center; color: #fff;
-                     background: linear-gradient(160deg, #2997ff, #0050c8); box-shadow: 0 10px 30px rgba(0,113,227,.3); }
+                     background: linear-gradient(160deg, #818cf8, #4338ca); box-shadow: 0 10px 30px rgba(79,70,229,.3); }
   .empty-state h2 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -.03em; }
   .empty-state p { margin: 10px auto 0; color: var(--muted); max-width: 460px; font-size: 16px; }
   .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; max-width: 760px; margin: 40px auto 0; text-align: left; }
@@ -448,7 +448,7 @@
       <p>Upload a recording or try the sample call. You'll get the customer outcome, a speaker-labelled transcript and exportable reports.</p>
       <div class="features">
         <div class="feature"><div class="fic" style="background:#34c759"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg></div><b>Outcome scoring</b><span>Lead temperature, next action and evidence quotes.</span></div>
-        <div class="feature"><div class="fic" style="background:#0071e3"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg></div><b>Diarized transcript</b><span>Timestamped, searchable and synced with audio.</span></div>
+        <div class="feature"><div class="fic" style="background:#4f46e5"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg></div><b>Diarized transcript</b><span>Timestamped, searchable and synced with audio.</span></div>
         <div class="feature"><div class="fic" style="background:#ff9500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></div><b>Review flags</b><span>Low-confidence lines highlighted for QA.</span></div>
       </div>
     </section>
