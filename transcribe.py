@@ -61,10 +61,14 @@ def build_settings(a: argparse.Namespace) -> Settings:
 
 
 def print_analysis(a: dict) -> None:
-    print(f"\nOUTCOME: {a['outcome_label'].upper()}  ({a['lead_temperature']} lead, {a['confidence']} confidence)"
+    print(f"\nOUTCOME: {a['outcome_label'].upper()}  ({a['lead_temperature']} lead, score {a.get('lead_score', 0)}/100, "
+          f"{a['confidence']} confidence)"
           + ("  ** needs human review **" if a.get("needs_review") else ""))
     print(f"  Why:  {a.get('reason', '')}")
     print(f"  Next: {a.get('next_action', '')}" + (f"  [{a['follow_up_when']}]" if a.get("follow_up_when") else ""))
+    missed = (a.get("discovery") or {}).get("missed") or []
+    if missed:
+        print(f"  Ask next time ({len(missed)}): " + "; ".join(q["topic"] for q in missed))
 
 
 def main(argv: list[str] | None = None) -> int:

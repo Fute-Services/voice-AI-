@@ -48,8 +48,10 @@ class Settings:
     cleanup: bool = field(default_factory=lambda: _bool("CLEANUP", True))
     # gemini-4-argon is the most accurate but needs a paid (billing-enabled) key.
     cleanup_model: str = field(default_factory=lambda: _env("CLEANUP_MODEL", "gemini-3.6-flash"))
-    # Used for a chunk when the primary model keeps failing (e.g. 503 "high demand"). Empty = none.
-    cleanup_fallback_model: str = field(default_factory=lambda: _env("CLEANUP_FALLBACK_MODEL", "gemini-3.5-flash"))
+    # Tried in order when the primary model keeps failing (503 "high demand", 429 quota). Comma separated.
+    # The lighter models at the end are less accurate but are rarely overloaded, so a call still gets a result.
+    cleanup_fallback_model: str = field(default_factory=lambda: os.getenv(
+        "CLEANUP_FALLBACK_MODEL", "gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3-flash-preview"))
     hindi_script: str = field(default_factory=lambda: _env("HINDI_SCRIPT", "roman"))  # roman|devanagari
     chunk_threshold_s: float = field(default_factory=lambda: float(_env("CHUNK_THRESHOLD_S", "1200")))
     chunk_len_s: float = field(default_factory=lambda: float(_env("CHUNK_LEN_S", "600")))
@@ -65,6 +67,10 @@ class Settings:
 
     # Review
     low_confidence: float = field(default_factory=lambda: float(_env("LOW_CONFIDENCE", "0.6")))
+
+    @property
+    def fallback_models(self) -> list[str]:
+        return [m.strip() for m in self.cleanup_fallback_model.split(",") if m.strip()]
 
     def resolve_provider(self) -> str:
         if self.stt_provider != "auto":

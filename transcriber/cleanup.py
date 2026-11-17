@@ -22,7 +22,7 @@ from .config import ConfigError, Settings
 from .cost import CostTracker
 from .models import Segment
 from .preprocess import cut_clip
-from .retry import APIError, Transient, with_retry
+from .retry import APIError, Transient, with_fallback
 
 log = logging.getLogger(__name__)
 
@@ -151,7 +151,7 @@ class Cleaner:
         self.s = settings
         self.cost = cost
         self.client = genai.Client(api_key=settings.gemini_api_key,
-                                   http_options=types.HttpOptions(timeout=900_000))
+                                   http_options=types.HttpOptions(timeout=180_000))
         self.config = types.GenerateContentConfig(
             system_instruction=SYSTEM.format(script_rule=SCRIPT_RULES[settings.hindi_script]),
             response_mime_type="application/json",
@@ -175,14 +175,12 @@ class Cleaner:
                     reason = resp.candidates[0].finish_reason if resp.candidates else "no candidates"
                     raise Transient(f"unparseable cleanup output (finish_reason={reason})") from exc
 
-            models = [m for m in (self.s.cleanup_model, self.s.cleanup_fallback_model) if m]
+            models = [self.s.cleanup_model, *self.s.fallback_models]
             edits = None
-            for model in dict.fromkeys(models):
-                try:
-                    edits = await with_retry(f"Cleanup chunk {chunk.index} ({model})", call, model, attempts=6)
-                    break
-                except APIError as exc:
-                    log.warning("%s", exc)
+            try:
+                edits, _ = await with_fallback(f"Cleanup chunk {chunk.index}", call, models)
+            except APIError:
+                pass  # already logged per model
             if edits is None:
                 log.error("cleanup chunk %d failed on %s - keeping raw STT text for %d segments",
                           chunk.index, models, len(chunk.owned))

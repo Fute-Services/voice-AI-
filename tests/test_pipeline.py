@@ -147,8 +147,54 @@ def fake_analysis(**over) -> dict:
             "requirements": {"budget": "80 lakh", "location": "Noida", "property_type": "", "bhk": "2 BHK",
                              "purpose": "", "timeline": "", "other": ""},
             "objections": [],
+            "mindset": {"motive": "self_use", "urgency": "immediate", "decision_maker": "joint_with_family",
+                        "financing": "unknown", "primary_concern": "", "competitors": [],
+                        "pitch_angle": "Make the Sunday visit family-friendly."},
+            "behaviour": {"buyer_type": "serious_buyer",
+                          "traits": {"seriousness": "high", "engagement": "high", "openness": "high",
+                                     "decisiveness": "high", "trust": "unknown", "price_sensitivity": "medium"},
+                          "tone": "positive", "communication_style": "Direct and cooperative",
+                          "verdict": "Genuine buyer who shared budget unprompted and fixed a day himself.",
+                          "how_to_handle": ["Confirm the visit in writing."],
+                          "observations": [{"observation": "Shared budget without being asked", "segment_id": 1,
+                                            "quote": "budget mera 80 lakh tak hai"},
+                                           {"observation": "Asked for a discount", "segment_id": 1,
+                                            "quote": "discount kitna milega"}]},
+            "buying_signals": [{"signal": "Bringing family to the visit", "segment_id": 3, "quote": "family ke saath"}],
+            "risk_signals": [],
+            "discovery_covered": ["budget", "next_step"],
             "evidence": [{"segment_id": 3, "quote": "Sunday ko 11 baje aa jaunga"}]}
     return base | over
+
+
+def test_analysis_mindset_discovery_and_score():
+    from transcriber.analysis import DISCOVERY, lead_score, verify
+
+    a = verify(fake_analysis(risk_signals=[{"signal": "Only wants the rate", "segment_id": 1, "quote": "bas rate bata do"}]),
+               call_segments())
+    # Real quote kept with its timestamp; invented one dropped and flagged.
+    assert a["buying_signals"] == [{"signal": "Bringing family to the visit", "segment_id": 3, "speaker": "Speaker 2",
+                                    "start": 16, "quote": "family ke saath"}]
+    assert a["risk_signals"] == [] and any("2 signal(s)" in f for f in a["flags"])
+    # Behaviour: invented observation dropped, label added, talk stats measured from the transcript.
+    b = a["behaviour"]
+    assert [o["observation"] for o in b["observations"]] == ["Shared budget without being asked"]
+    assert b["observations"][0]["start"] == 6 and b["buyer_type_label"] == "Serious buyer"
+    assert b["stats"] == {"talk_share_pct": 46, "customer_turns": 2, "avg_words_per_turn": 11, "questions_asked": 0}
+    # Discovery: covered topics reported, every other topic comes back as a question to ask.
+    d = a["discovery"]
+    assert [c["key"] for c in d["covered"]] == ["budget", "next_step"] and "discovery_covered" not in a
+    assert len(d["missed"]) == len(DISCOVERY) - 2 and d["total"] == len(DISCOVERY)
+    assert d["missed"][0]["key"] == "purpose" and d["missed"][0]["question"].endswith("?") and d["missed"][0]["hinglish"]
+    # visit 45 + immediate 20 + joint 6 + budget 8 + location 4 + motive 3
+    assert a["lead_score"] == 86
+    assert lead_score(fake_analysis(outcome="not_interested")) == 15
+    assert lead_score(fake_analysis(outcome="wrong_number")) == 0
+    assert verify(fake_analysis(outcome="wrong_number"), call_segments())["discovery"]["missed"] == []
+    # Analyses saved before these fields existed must still verify.
+    old = {k: v for k, v in fake_analysis().items()
+           if k not in ("mindset", "behaviour", "buying_signals", "risk_signals", "discovery_covered")}
+    assert verify(old, call_segments())["lead_score"] == 45 + 8 + 4
 
 
 def test_analysis_verify_keeps_real_quotes():
@@ -198,6 +244,11 @@ def test_analyzer_with_fake_client_and_outputs(tmp_path):
     assert json.loads(paths["json"].read_text(encoding="utf-8"))["analysis"]["outcome"] == "site_visit_scheduled"
     md = paths["analysis_md"].read_text(encoding="utf-8")
     assert "Site visit scheduled" in md and "Budget: 80 lakh" in md and "[00:00:16] Speaker 2" in md
+    assert "score: 86/100" in md and "Decision maker: Joint with family" in md and "- Financing: " not in md
+    assert "## Buying signals" in md and "## Questions to ask next (2/11 topics covered)" in md
+    assert "**Loan or own funds:** Will you take a home loan" in md
+    assert "**Type: Serious buyer** · tone: positive" in md and "- Seriousness: high" in md
+    assert "- Trust in the agent" not in md and "Customer spoke 46% of the call" in md
 
 
 def test_analyzer_empty_transcript():

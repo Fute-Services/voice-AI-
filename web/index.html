@@ -303,7 +303,10 @@
   .list { margin: 0; padding: 0; list-style: none; }
   .list li { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--hair); color: var(--text-2); }
   .list li:first-child { border-top: 0; padding-top: 0; }
-  .list li svg { color: var(--muted); margin-top: 4px; }
+  .list li svg { color: var(--muted); margin-top: 4px; flex: none; }
+  .qa small { display: block; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .qa b { display: block; font-weight: 600; color: var(--text); margin-top: 2px; }
+  .qa em { display: block; color: var(--muted); font-size: 14px; margin-top: 2px; }
   .muted { color: var(--muted); }
 
   .quote { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm);
@@ -837,20 +840,48 @@ function renderAnalysis(a, flaggedCount, failed) {
   const reqLabel = (k) => ({ bhk: "BHK", property_type: "Property type" }[k] || cap(k));
   const card = (title, body, cls = "") => `<div class="card ${cls}"><div class="card-head"><h3>${title}</h3></div><div class="card-body">${body}</div></div>`;
   const tone = TONE[a.outcome] || "none";
+  const disc = a.discovery || {};   // absent on analyses saved before discovery tracking existed
 
-  const verdict = `
+  // Behaviour profile leads the page when present; older analyses fall back to the outcome card on top.
+  const b = a.behaviour && a.behaviour.buyer_type ? a.behaviour : null;
+  const LEVEL = { high: "ok", medium: "mid", low: "bad" };
+  const PRICE = { high: "bad", medium: "mid", low: "ok" };   // high price sensitivity is the harder case
+  const TRAITS = [["seriousness", "Seriousness"], ["engagement", "Engagement"], ["openness", "Openness"],
+                  ["decisiveness", "Decisiveness"], ["trust", "Trust in agent"], ["price_sensitivity", "Price sensitivity"]];
+  const behaviourCard = b ? `
     <div class="card verdict">
       <div>
-        <div class="label">Customer outcome</div>
+        <div class="label">Customer behaviour</div>
+        <div class="outcome">
+          <h2>${esc(b.buyer_type_label || cap(b.buyer_type))}</h2>
+          ${b.tone && b.tone !== "unknown" ? `<span class="badge t-none">${esc(cap(b.tone))} tone</span>` : ""}
+          ${a.needs_review ? '<span class="badge t-bad">Needs human review</span>' : ""}
+        </div>
+        ${b.verdict ? `<p class="reason">${esc(b.verdict)}</p>` : ""}
+      </div>
+      <div class="metrics">${TRAITS.map(([k, label]) => {
+        const v = (b.traits || {})[k], known = v && v !== "unknown";
+        const dot = known ? (k === "price_sensitivity" ? PRICE : LEVEL)[v] || "none" : "none";
+        return `<div class="metric"><span>${label}</span><b class="dot-${dot}">${known ? esc(v) : "—"}</b></div>`;
+      }).join("")}</div>
+    </div>` : "";
+
+  const verdict = `
+    <div class="card verdict"${b ? ' style="margin-top:18px"' : ""}>
+      <div>
+        <div class="label">Call outcome</div>
         <div class="outcome">
           <h2 class="dot-${tone}">${esc(a.outcome_label || cap(a.outcome))}</h2>
           ${a.outcome_label ? "" : `<span class="badge t-${tone}">${esc(cap(a.outcome))}</span>`}
-          ${a.needs_review ? '<span class="badge t-bad">Needs human review</span>' : ""}
+          ${a.needs_review && !b ? '<span class="badge t-bad">Needs human review</span>' : ""}
         </div>
         ${a.reason ? `<p class="reason">${esc(a.reason)}</p>` : ""}
+        ${b && a.next_action ? `<p class="reason"><b>Next:</b> ${esc(a.next_action)}</p>` : ""}
       </div>
       <div class="metrics">
         <div class="metric"><span>Lead temperature</span><b class="dot-${TEMP[a.lead_temperature] || "none"}">${esc(a.lead_temperature || "—")}</b></div>
+        <div class="metric"><span>Lead score</span><b>${a.lead_score != null ? `${+a.lead_score} / 100` : "—"}</b></div>
+        <div class="metric"><span>Discovery covered</span><b>${disc.total ? `${(disc.covered || []).length} / ${+disc.total}` : "—"}</b></div>
         <div class="metric"><span>Confidence</span><b class="dot-${CONF[a.confidence] || "none"}">${esc(a.confidence || "—")}</b></div>
         <div class="metric"><span>Flagged lines</span><b>${flaggedCount}</b></div>
         <div class="metric"><span>Follow-up</span><b>${esc(a.follow_up_when || "—")}</b></div>
@@ -858,8 +889,24 @@ function renderAnalysis(a, flaggedCount, failed) {
     </div>`;
 
   const blocks = [];
+  if (b) {
+    const tips = b.how_to_handle || [];
+    if (tips.length) blocks.push(card("How to handle this customer",
+      `<ul class="list">${tips.map((t) => `<li>${ICON.check}<span>${esc(t)}</span></li>`).join("")}</ul>`));
+    const st = b.stats || {};
+    const talk = [["Customer talk share", st.talk_share_pct != null ? `${+st.talk_share_pct}%` : ""],
+                  ["Questions asked", st.questions_asked != null ? String(+st.questions_asked) : ""],
+                  ["Words per reply", st.avg_words_per_turn != null ? String(+st.avg_words_per_turn) : ""],
+                  ["Times spoken", st.customer_turns != null ? String(+st.customer_turns) : ""],
+                  ["Speaking style", b.communication_style || ""]].filter(([, v]) => v);
+    if (talk.length) blocks.push(card("How they talked",
+      `<dl class="kv">${talk.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>`));
+    const obs = b.observations || [];
+    if (obs.length) blocks.push(card("Behaviour observed", obs.map((x) =>
+      `<button class="quote" data-t="${+x.start || 0}"><span class="ts">${ICON.play}${fmt(x.start)}</span><span class="qs">${esc(x.observation)}</span><q>${esc(x.quote)}</q></button>`).join(""), "span2"));
+  }
   if (a.summary) blocks.push(card("Summary", `<p class="prose">${esc(a.summary)}</p>`));
-  if (a.next_action) blocks.push(card("Recommended next action",
+  if (a.next_action && !b) blocks.push(card("Recommended next action",
     `<div class="next"><div class="ni">${ICON.arrow}</div><div><b>${esc(a.next_action)}</b>${a.follow_up_when ? `<span>Due: ${esc(a.follow_up_when)}</span>` : ""}</div></div>`));
   if (req.length) blocks.push(card("Customer requirements",
     `<dl class="kv">${req.map(([k, v]) => `<div><dt>${esc(reqLabel(k))}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>`));
@@ -867,13 +914,32 @@ function renderAnalysis(a, flaggedCount, failed) {
   blocks.push(card("Objections raised", objections.length
     ? `<ul class="list">${objections.map((o) => `<li>${ICON.dash}<span>${esc(o)}</span></li>`).join("")}</ul>`
     : `<p class="prose muted">No objections detected.</p>`));
+
+  // Customer mindset: only what the call actually revealed.
+  const m = a.mindset || {};
+  const known = (v) => v && v !== "unknown";
+  const mind = [["Buying motive", m.motive], ["Urgency", m.urgency], ["Decision maker", m.decision_maker],
+                ["Financing", m.financing], ["Main concern", m.primary_concern],
+                ["Also considering", (m.competitors || []).join(", ")]].filter(([, v]) => known(v));
+  if (mind.length) blocks.push(card("Customer mindset",
+    `<dl class="kv">${mind.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(/^[a-z0-9_]+$/.test(v) ? cap(v) : v)}</dd></div>`).join("")}</dl>`));
+  if (m.pitch_angle) blocks.push(card("How to pitch next", `<p class="prose">${esc(m.pitch_angle)}</p>`));
+  const signals = (title, items) => items.length && blocks.push(card(title, items.map((x) =>
+    `<button class="quote" data-t="${+x.start || 0}"><span class="ts">${ICON.play}${fmt(x.start)}</span><span class="qs">${esc(x.signal)}</span><q>${esc(x.quote)}</q></button>`).join("")));
+  signals("Buying signals", a.buying_signals || []);
+  signals("Risk signals", a.risk_signals || []);
+  const missed = disc.missed || [];
+  if (missed.length) blocks.push(card("Questions to ask on the next call",
+    `<ul class="list">${missed.map((q) => `<li>${ICON.dash}<div class="qa"><small>${esc(q.topic)}</small><b>${esc(q.question)}</b><em>${esc(q.hinglish)}</em></div></li>`).join("")}</ul>`, "span2"));
+
   const ev = a.evidence || [];
   if (ev.length) blocks.push(card("Supporting evidence", ev.map((e) =>
     `<button class="quote" data-t="${+e.start || 0}"><span class="ts">${ICON.play}${fmt(e.start)}</span><span class="qs">${esc(e.speaker)}</span><q>${esc(e.quote)}</q></button>`).join(""), "span2"));
   if ((a.flags || []).length) blocks.push(card("Analysis flags",
     `<ul class="list">${a.flags.map((f) => `<li>${ICON.err}<span>${esc(f)}</span></li>`).join("")}</ul>`, "span2"));
 
-  el.innerHTML = verdict + `<div class="ov-grid">${blocks.join("")}</div>`;
+  const grid = `<div class="ov-grid">${blocks.join("")}</div>`;
+  el.innerHTML = b ? behaviourCard + grid + verdict : verdict + grid;
   el.querySelectorAll(".quote").forEach((q) => (q.onclick = () => seek(+q.dataset.t)));
   return true;
 }

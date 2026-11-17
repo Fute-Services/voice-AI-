@@ -50,13 +50,32 @@ def _log_retry(state) -> None:
     log.warning("attempt %d failed (%s: %s); retrying", state.attempt_number, type(exc).__name__, str(exc)[:200])
 
 
-async def with_retry(what: str, fn, *args, attempts: int = 5, **kwargs):
+async def with_fallback(what: str, fn, models: list[str]):
+    """Await fn(model) on the first model that works; returns (result, model).
+
+    A model that is overloaded (503 "high demand") usually stays overloaded for minutes, so each model gets
+    only a couple of quick tries before we move on, instead of backing off for minutes on the first one.
+    Raises APIError if every model fails.
+    """
+    models = list(dict.fromkeys(m for m in models if m))
+    last: APIError | None = None
+    for i, model in enumerate(models):
+        final = i == len(models) - 1
+        try:
+            return await with_retry(f"{what} ({model})", fn, model, attempts=3 if final else 2, max_wait=8), model
+        except APIError as exc:
+            last = exc
+            log.warning("%s%s", exc, "" if final else f" - switching to {models[i + 1]}")
+    raise last or APIError(f"{what} failed: no model configured")
+
+
+async def with_retry(what: str, fn, *args, attempts: int = 5, max_wait: float = 60, **kwargs):
     """Await fn(*args, **kwargs), retrying transient errors. Wraps final failure in APIError."""
     try:
         async for attempt in AsyncRetrying(
             retry=retry_if_exception(is_transient),
             stop=stop_after_attempt(attempts),
-            wait=wait_exponential_jitter(initial=3, max=60),
+            wait=wait_exponential_jitter(initial=min(3, max_wait), max=max_wait),
             before_sleep=_log_retry,
             reraise=True,
         ):

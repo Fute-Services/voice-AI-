@@ -67,6 +67,18 @@ objections, and 1-3 **evidence quotes** from the customer. Each quote is checked
 Quotes that aren't found are dropped. If nothing supports the decision, it is set to low confidence and
 marked `needs_review`.
 
+**Customer mindset and sales coaching.** Each analysis also includes:
+
+- `mindset`: buying motive, urgency, decision maker, financing, main concern, competing projects, and a
+  suggested pitch angle for the next call. Anything the call did not reveal stays `unknown`.
+- `buying_signals` / `risk_signals`: each backed by a customer quote that is checked against the transcript
+  (unbacked signals are removed).
+- `discovery`: which of the 11 discovery topics the call covered, and for every topic missed, the question
+  the agent should ask next time (short, easy-to-ask wording in English and Hinglish). The question bank is
+  `DISCOVERY` in `transcriber/analysis.py`; edit it there to change the wording.
+- `lead_score` (0-100): computed in code from the outcome, urgency, decision maker, financing, and whether
+  budget, location and motive are known.
+
 Re-run only the decision on existing transcripts (no new STT cost):
 
 ```bash
