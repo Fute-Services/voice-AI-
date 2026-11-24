@@ -162,7 +162,17 @@ def fake_analysis(**over) -> dict:
                                             "quote": "discount kitna milega"}]},
             "buying_signals": [{"signal": "Bringing family to the visit", "segment_id": 3, "quote": "family ke saath"}],
             "risk_signals": [],
-            "discovery_covered": ["budget", "next_step"],
+            "discovery": [{"topic": "budget", "status": "answered", "answer": "80 lakh"},
+                          {"topic": "next_step", "status": "answered", "answer": "Sunday 11 baje"},
+                          {"topic": "financing", "status": "asked_not_answered", "answer": ""}],
+            "next_questions": [
+                {"topic": "next_step", "hinglish": "Sunday ko family mein kaun kaun aa raha hai?",
+                 "english": "Who from the family is coming on Sunday?", "why": "Plan the visit around them."},
+                {"topic": "financing", "hinglish": "Loan ke liye hum aapki koi madad kar sakte hain?",
+                 "english": "Can we help you with the loan?", "why": "He avoided the loan question."},
+                {"topic": "financing", "hinglish": "Loan ke liye hum aapki koi madad kar sakte hain?",   # repeat
+                 "english": "", "why": ""},
+                {"topic": "made_up", "hinglish": "", "english": "", "why": "empty"}],
             "evidence": [{"segment_id": 3, "quote": "Sunday ko 11 baje aa jaunga"}]}
     return base | over
 
@@ -181,20 +191,51 @@ def test_analysis_mindset_discovery_and_score():
     assert [o["observation"] for o in b["observations"]] == ["Shared budget without being asked"]
     assert b["observations"][0]["start"] == 6 and b["buyer_type_label"] == "Serious buyer"
     assert b["stats"] == {"talk_share_pct": 46, "customer_turns": 2, "avg_words_per_turn": 11, "questions_asked": 0}
-    # Discovery: covered topics reported, every other topic comes back as a question to ask.
+    # Discovery: each topic is answered (with what was said), dodged, or not discussed yet.
     d = a["discovery"]
-    assert [c["key"] for c in d["covered"]] == ["budget", "next_step"] and "discovery_covered" not in a
-    assert len(d["missed"]) == len(DISCOVERY) - 2 and d["total"] == len(DISCOVERY)
-    assert d["missed"][0]["key"] == "purpose" and d["missed"][0]["question"].endswith("?") and d["missed"][0]["hinglish"]
+    assert [(c["key"], c["answer"]) for c in d["covered"]] == [("budget", "80 lakh"), ("next_step", "Sunday 11 baje")]
+    assert [x["key"] for x in d["dodged"]] == ["financing"]
+    assert len(d["missed"]) == len(DISCOVERY) - 3 and d["total"] == len(DISCOVERY)
+    assert d["missed"][0]["key"] == "purpose" and "financing" not in [m["key"] for m in d["missed"]]
+    # Questions: the model's own, in its order; repeats and empty ones dropped.
+    q = a["next_questions"]
+    assert [x["key"] for x in q] == ["next_step", "financing"] and all(x["tailored"] for x in q)
+    assert q[0]["hinglish"].startswith("Sunday ko family") and q[1]["topic"] == "Loan or own funds"
     # visit 45 + immediate 20 + joint 6 + budget 8 + location 4 + motive 3
     assert a["lead_score"] == 86
     assert lead_score(fake_analysis(outcome="not_interested")) == 15
     assert lead_score(fake_analysis(outcome="wrong_number")) == 0
-    assert verify(fake_analysis(outcome="wrong_number"), call_segments())["discovery"]["missed"] == []
+    wrong = verify(fake_analysis(outcome="wrong_number"), call_segments())
+    assert wrong["discovery"]["missed"] == [] and wrong["next_questions"] == []
     # Analyses saved before these fields existed must still verify.
     old = {k: v for k, v in fake_analysis().items()
-           if k not in ("mindset", "behaviour", "buying_signals", "risk_signals", "discovery_covered")}
-    assert verify(old, call_segments())["lead_score"] == 45 + 8 + 4
+           if k not in ("mindset", "behaviour", "buying_signals", "risk_signals", "discovery", "next_questions")}
+    assert verify(dict(old), call_segments())["lead_score"] == 45 + 8 + 4
+    legacy = verify(old | {"discovery_covered": ["budget", "next_step"]}, call_segments())
+    assert [c["key"] for c in legacy["discovery"]["covered"]] == ["budget", "next_step"]
+    assert "discovery_covered" not in legacy
+
+
+def test_next_questions_fallback_is_short_and_fits_the_outcome():
+    from transcriber.analysis import DISCOVERY, MAX_QUESTIONS, verify
+
+    # Model wrote no questions: a short starter list from the bank, the dodged topic first - never all 11.
+    a = verify(fake_analysis(outcome="follow_up", next_questions=[]), call_segments())
+    q = a["next_questions"]
+    assert [x["key"] for x in q] == ["financing", "purpose", "timeline"] and not any(x["tailored"] for x in q)
+    assert q[0]["hinglish"] == DISCOVERY["financing"][2] and q[0]["english"].endswith("?")
+    # A thin list from the model is topped up, without repeating a topic it already asked about.
+    one = [{"topic": "financing", "hinglish": "Loan mein madad chahiye?", "english": "", "why": ""}]
+    q = verify(fake_analysis(outcome="interested", next_questions=one), call_segments())["next_questions"]
+    assert [(x["key"], x["tailored"]) for x in q] == [("financing", True), ("purpose", False), ("timeline", False)]
+    # ...but not for a visit that is already fixed.
+    assert len(verify(fake_analysis(next_questions=one), call_segments())["next_questions"]) == 1
+    # Someone who said no is never handed a generic checklist.
+    assert verify(fake_analysis(outcome="not_interested", next_questions=[]), call_segments())["next_questions"] == []
+    # A model that over-produces is capped.
+    many = [{"topic": "other", "hinglish": f"Sawal {i}?", "english": "", "why": ""} for i in range(9)]
+    capped = verify(fake_analysis(next_questions=many), call_segments())["next_questions"]
+    assert len(capped) == MAX_QUESTIONS and capped[0]["topic"] == "Follow-up"
 
 
 def test_analysis_verify_keeps_real_quotes():
@@ -245,8 +286,10 @@ def test_analyzer_with_fake_client_and_outputs(tmp_path):
     md = paths["analysis_md"].read_text(encoding="utf-8")
     assert "Site visit scheduled" in md and "Budget: 80 lakh" in md and "[00:00:16] Speaker 2" in md
     assert "score: 86/100" in md and "Decision maker: Joint with family" in md and "- Financing: " not in md
-    assert "## Buying signals" in md and "## Questions to ask next (2/11 topics covered)" in md
-    assert "**Loan or own funds:** Will you take a home loan" in md
+    assert "## Buying signals" in md and "## Questions to ask next" in md
+    assert "1. **Sunday ko family mein kaun kaun aa raha hai?**" in md and "_Can we help you with the loan?_" in md
+    assert "## Discovery (2/11 topics known)" in md and "- Budget: 80 lakh" in md
+    assert "- Asked but not answered: Loan or own funds" in md and "- Not discussed yet: Purpose" in md
     assert "**Type: Serious buyer** · tone: positive" in md and "- Seriousness: high" in md
     assert "- Trust in the agent" not in md and "Customer spoke 46% of the call" in md
 
@@ -258,6 +301,290 @@ def test_analyzer_empty_transcript():
     s.gemini_api_key = "test"
     a = asyncio.run(Analyzer(s, CostTracker()).analyze([]))
     assert a["outcome"] == "unclear" and a["needs_review"]
+
+
+# --- speed: thinking level, model cooldown, progress events ------------------
+
+def test_generate_caps_thinking_and_falls_back_when_rejected():
+    from google.genai import errors, types
+
+    from transcriber import llm
+
+    seen = []
+
+    class Models:
+        async def generate_content(self, model, contents, config):
+            level = config.thinking_config.thinking_level.value if config.thinking_config else None
+            seen.append((model, level))
+            if model == "old-model" and level:
+                raise errors.APIError(400, {"error": {"message": "thinking_level is not supported", "status": "INVALID_ARGUMENT"}})
+            return "ok"
+
+    client = type("C", (), {"aio": type("A", (), {"models": Models()})()})()
+    cfg = types.GenerateContentConfig(system_instruction="x")
+    llm._no_thinking.clear()
+    assert asyncio.run(llm.generate(client, "new-model", "hi", cfg, "low")) == "ok"
+    assert asyncio.run(llm.generate(client, "new-model", "hi", cfg, "default")) == "ok"   # model's own setting
+    assert asyncio.run(llm.generate(client, "old-model", "hi", cfg, "low")) == "ok"       # retried without it
+    assert asyncio.run(llm.generate(client, "old-model", "hi", cfg, "low")) == "ok"       # remembered
+    assert seen == [("new-model", "LOW"), ("new-model", None), ("old-model", "LOW"), ("old-model", None),
+                    ("old-model", None)]
+    assert cfg.thinking_config is None  # the shared config is never mutated
+
+
+def test_fallback_remembers_an_overloaded_model():
+    from transcriber import retry
+
+    calls = []
+
+    async def fn(model):
+        calls.append(model)
+        if model == "busy":
+            raise retry.APIError("503 high demand")
+        return model.upper()
+
+    retry._cooling.clear()
+    assert asyncio.run(retry.with_fallback("x", fn, ["busy", "spare"])) == ("SPARE", "spare")
+    calls.clear()
+    # Next call (another chunk, or the analysis) goes straight to the healthy model.
+    assert asyncio.run(retry.with_fallback("x", fn, ["busy", "spare"])) == ("SPARE", "spare")
+    assert calls == ["spare"]
+    retry._cooling.clear()
+
+    # A model that timed out already cost the whole deadline: move on instead of waiting it out again.
+    async def slow(model):
+        calls.append(model)
+        if model == "hung":
+            raise TimeoutError("deadline")
+        return "done"
+
+    calls.clear()
+    assert asyncio.run(retry.with_fallback("x", slow, ["hung", "spare"])) == ("done", "spare")
+    assert calls == ["hung", "spare"]
+    retry._cooling.clear()
+
+
+def test_cleanup_deadline_scales_with_the_clip():
+    from transcriber.cleanup import MAX_TIMEOUT_S, request_timeout
+
+    assert request_timeout(72) < 60 < request_timeout(600) < request_timeout(3600) == MAX_TIMEOUT_S
+
+
+def test_pipeline_reports_stages_and_transcript_before_analysis(tmp_path, monkeypatch):
+    from transcriber import pipeline
+
+    class Provider:
+        async def transcribe(self, audio, duration):
+            assert audio.suffix == ".flac"
+            return Transcript(call_segments(), duration=duration, provider="test", model="m")
+
+    class FakeAnalyzer:
+        def __init__(self, settings, cost):
+            pass
+
+        async def analyze(self, segments):
+            from transcriber.analysis import verify
+            return verify(fake_analysis(), segments)
+
+    async def fake_preprocess(src, work, denoise=True):
+        return work / "x.16k.flac"
+
+    async def fake_duration(src):
+        return 21.0
+
+    monkeypatch.setattr(pipeline, "check_ffmpeg", lambda: None)
+    monkeypatch.setattr(pipeline, "probe_duration", fake_duration)
+    monkeypatch.setattr(pipeline, "preprocess", fake_preprocess)
+    monkeypatch.setattr(pipeline, "get_provider", lambda s, c: Provider())
+    monkeypatch.setattr(pipeline, "Analyzer", FakeAnalyzer)
+    src = tmp_path / "call.mp3"
+    src.write_bytes(b"x")
+    s = Settings()
+    s.cleanup = False
+    events = []
+    res = asyncio.run(pipeline.run(src, tmp_path, s, on_event=lambda name, data: events.append((name, data))))
+    assert [(n, d.get("stage")) for n, d in events] == [("stage", "preprocess"), ("stage", "stt"),
+                                                         ("transcript", None), ("stage", "analysis")]
+    assert len(events[2][1]["segments"]) == 4 and events[2][1]["review"] == res.review
+    assert res.analysis["outcome"] == "site_visit_scheduled" and res.analysis["next_questions"]
+
+
+# --- advanced analytics: metrics, agent coaching, moments, Q&A, dashboard ---------
+
+def test_call_metrics_talk_time_gaps_and_interruptions():
+    from transcriber.metrics import call_metrics
+
+    segs = [Segment(0, "Speaker 1", 0, 40, "Namaste sir, project ke baare mein bata doon? " + "bla " * 80),
+            Segment(1, "Speaker 2", 39, 45, "Haan boliye. Price kya hai?"),        # starts 1s early = interruption
+            Segment(2, "Speaker 1", 50, 70, "Sir 80 lakh se start hai."),          # 5s dead air before
+            Segment(3, "Speaker 2", 71, 80, "Possession kab hai? Loan milega?")]
+    m = call_metrics(segs, 80, agent="Speaker 1", customer="Speaker 2")
+    a, c = m["speakers"]["Speaker 1"], m["speakers"]["Speaker 2"]
+    assert (a["talk_seconds"], c["talk_seconds"]) == (60, 15) and (a["talk_pct"], c["talk_pct"]) == (80, 20)
+    assert m["talk_ratio"] == "80:20" and m["agent_talk_pct"] == 80
+    assert c["interruptions"] == 1 and a["interruptions"] == 0
+    assert m["dead_air"]["count"] == 1 and m["dead_air"]["longest"][0] == {"start": 45, "seconds": 5.0}
+    assert c["questions"] == 3 and a["questions"] == 1 and a["turns"] == 2
+    assert m["longest_monologue"]["speaker"] == "Speaker 1" and m["longest_monologue"]["seconds"] == 40
+    assert a["avg_reply_seconds"] == 5.0 and c["avg_reply_seconds"] == 1.0
+    hints = [h["text"] for h in m["hints"]]
+    assert any("Agent talked 80%" in h for h in hints) and any("Customer asked 3" in h for h in hints)
+    assert any("asked only 1 question" in h for h in hints)
+    # Without roles it still measures per speaker, but makes no agent/customer claims.
+    assert "hints" not in call_metrics(segs, 80) and call_metrics([], 10) == {}
+
+
+def agent_perf() -> dict:
+    return {"skills": [{"skill": "opening", "score": 5, "comment": "Clear intro.", "segment_id": 0,
+                        "quote": "main Neha bol rahi hoon Green Valley se"},
+                       {"skill": "closing", "score": 4, "comment": "Fixed a visit.", "segment_id": 2,
+                        "quote": "Sir site visit ke liye aa sakte hain?"},
+                       {"skill": "objection_handling", "score": 0, "comment": "No objections.", "segment_id": -1,
+                        "quote": ""},
+                       {"skill": "discovery", "score": 9, "comment": "Asked budget.", "segment_id": 1,  # customer line
+                        "quote": "budget mera 80 lakh tak hai"},
+                       {"skill": "opening", "score": 1, "comment": "dup", "segment_id": -1, "quote": ""},
+                       {"skill": "made_up", "score": 3, "comment": "", "segment_id": -1, "quote": ""}],
+            "strengths": ["Fixed a concrete visit time", " "],
+            "improvements": [{"tip": "Ask about loan needs", "segment_id": 2, "quote": "site visit ke liye",
+                              "better_line": "Sir, loan ke liye bhi help chahiye kya?"},
+                             {"tip": "", "segment_id": -1, "quote": "", "better_line": ""}],
+            "compliance": []}
+
+
+def test_agent_scorecard_moments_and_mood():
+    from transcriber.analysis import to_markdown, verify
+
+    a = verify(fake_analysis(agent_performance=agent_perf(),
+                             key_moments=[{"type": "commitment", "segment_id": 3, "label": "Fixed Sunday visit"},
+                                          {"type": "buying_signal", "segment_id": 1, "label": "Shared budget"},
+                                          {"type": "objection", "segment_id": 99, "label": "Invented"},
+                                          {"type": "nonsense", "segment_id": 1, "label": "Bad type"}],
+                             sentiment_arc={"start": "neutral", "middle": "positive", "end": "weird"},
+                             sentiment_trend="Warmed up once the budget fit."), call_segments())
+    ap = a["agent_performance"]
+    assert [(x["key"], x["score"]) for x in ap["skills"]] == [("opening", 5), ("discovery", 5),
+                                                            ("objection_handling", 0), ("closing", 4)]
+    assert ap["skills"][0]["start"] == 0 and "quote" not in ap["skills"][1]   # a customer line is not agent proof
+    assert ap["score"] == 93 and ap["grade"] == "A"                           # (5+5+4)/3*20, n/a not counted
+    assert ap["strengths"] == ["Fixed a concrete visit time"] and len(ap["improvements"]) == 1
+    assert ap["improvements"][0]["start"] == 12
+    assert any("agent-coaching quote" in f for f in a["flags"])
+    assert [(m["type"], m["start"]) for m in a["key_moments"]] == [("buying_signal", 6), ("commitment", 16)]
+    assert a["sentiment_arc"] == {"start": "neutral", "middle": "positive", "end": "unknown"}
+    # Re-verifying a saved analysis keeps the cleaned scorecard as it is.
+    assert verify(dict(a), call_segments())["agent_performance"] == ap
+    md = to_markdown(a, "x")
+    assert "## Agent scorecard: 93/100 (grade A)" in md and "- Objection handling: n/a" in md
+    assert "Better: _Sir, loan ke liye bhi help chahiye kya?_" in md
+    assert "start: neutral -> middle: positive -> end: unknown" in md and "[00:00:16] Commitment" in md
+    # Older analyses without these fields still verify.
+    assert verify(fake_analysis(), call_segments())["agent_performance"] == {}
+    # A wrong number is not a sales call: no agent score to drag the team average down.
+    wrong = verify(fake_analysis(outcome="wrong_number", agent_performance=agent_perf()), call_segments())
+    assert wrong["agent_performance"]["score"] is None and wrong["agent_performance"]["grade"] is None
+    assert "## Agent scorecard\n" in to_markdown(wrong, "x")
+
+
+def test_pipeline_saves_metrics_with_roles(tmp_path, monkeypatch):
+    from transcriber import pipeline
+
+    class Provider:
+        async def transcribe(self, audio, duration):
+            return Transcript(call_segments(), duration=duration, provider="test", model="m")
+
+    class FakeAnalyzer:
+        def __init__(self, settings, cost):
+            pass
+
+        async def analyze(self, segments):
+            from transcriber.analysis import verify
+            return verify(fake_analysis(), segments)
+
+    async def fake_preprocess(src, work, denoise=True):
+        return work / "x.16k.flac"
+
+    async def fake_duration(src):
+        return 21.0
+
+    monkeypatch.setattr(pipeline, "check_ffmpeg", lambda: None)
+    monkeypatch.setattr(pipeline, "probe_duration", fake_duration)
+    monkeypatch.setattr(pipeline, "preprocess", fake_preprocess)
+    monkeypatch.setattr(pipeline, "get_provider", lambda s, c: Provider())
+    monkeypatch.setattr(pipeline, "Analyzer", FakeAnalyzer)
+    src = tmp_path / "call.mp3"
+    src.write_bytes(b"x")
+    s = Settings()
+    s.cleanup = False
+    res = asyncio.run(pipeline.run(src, tmp_path, s))
+    m = json.loads(res.paths["json"].read_text(encoding="utf-8"))["meta"]["metrics"]
+    assert m["roles"] == {"agent": "Speaker 1", "customer": "Speaker 2"} and m["talk_ratio"] == "48:52"
+
+
+def test_call_qa_checks_citations():
+    from transcriber.qa import CallQA
+
+    class Resp:
+        text = json.dumps({"answer": "Budget is 80 lakh, in Noida.",
+                           "citations": [{"segment_id": 1, "quote": "budget mera 80 lakh tak hai"},
+                                         {"segment_id": 1, "quote": "2 crore bhi chalega"}]})
+        usage_metadata = None
+
+    class Models:
+        async def generate_content(self, model, contents, config):
+            assert contents.endswith("QUESTION: Budget kya hai?") and "Q: pehla sawal" in contents
+            return Resp()
+
+    s = Settings()
+    s.gemini_api_key = "test"
+    qa = CallQA(s)
+    qa.client = type("C", (), {"aio": type("A", (), {"models": Models()})()})()
+    out = asyncio.run(qa.ask(call_segments(), "Budget kya hai?", [{"q": "pehla sawal", "a": "jawab"}]))
+    assert out["answer"].startswith("Budget is 80 lakh")
+    assert out["citations"] == [{"segment_id": 1, "speaker": "Speaker 2", "start": 6,
+                                 "quote": "budget mera 80 lakh tak hai"}]
+    with pytest.raises(ValueError):
+        asyncio.run(qa.ask(call_segments(), "   "))
+
+
+def test_dashboard_endpoints(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    import app as webapp
+    from transcriber.analysis import verify
+
+    monkeypatch.setattr(webapp, "RUNS", tmp_path)
+    monkeypatch.setattr(webapp, "APP_PASSWORD", "")
+    run = tmp_path / "abcdef0123"
+    run.mkdir()
+    (run / "call.mp3").write_bytes(b"x")
+    t = Transcript(call_segments(), duration=21, provider="test", model="m")
+    a = verify(fake_analysis(agent_performance=agent_perf()), call_segments())
+    write_outputs(t, run, "call", [], {"total_usd": 0.01}, a)
+    (tmp_path / "0000000000").mkdir()   # a failed run with no transcript is skipped
+
+    c = TestClient(webapp.app)
+    runs = c.get("/api/runs").json()["runs"]
+    assert len(runs) == 1 and runs[0]["run_id"] == "abcdef0123" and runs[0]["file"] == "call.mp3"
+    assert runs[0]["outcome"] == "site_visit_scheduled" and runs[0]["lead_score"] == 86
+    assert runs[0]["agent_grade"] == "A"
+    full = c.get("/api/runs/abcdef0123").json()
+    assert full["analysis"]["outcome"] == "site_visit_scheduled" and "words" not in full["segments"][0]
+    assert set(full["downloads"]) >= {"json", "analysis_md"} and full["audio_url"].endswith("/audio")
+    assert c.get("/api/runs/0000000000").status_code == 404 and c.get("/api/runs/zzz").status_code == 404
+    csv_text = c.get("/api/leads.csv").text
+    assert csv_text.startswith("﻿created,file,outcome_label") and "Site visit scheduled" in csv_text
+
+    class FakeQA:
+        def __init__(self, settings):
+            pass
+
+        async def ask(self, segs, question, history):
+            assert len(segs) == 4 and question == "Budget?"
+            return {"answer": "80 lakh", "citations": []}
+
+    monkeypatch.setattr(webapp, "CallQA", FakeQA)
+    assert c.post("/api/runs/abcdef0123/ask", json={"question": "Budget?"}).json()["answer"] == "80 lakh"
 
 
 # --- integration ------------------------------------------------------------

@@ -43,18 +43,16 @@ async def probe_duration(path: Path) -> float:
         raise AudioError(f"Could not read duration of {path} - is it a valid audio file?") from exc
 
 
-async def preprocess(src: Path, work_dir: Path, denoise: bool = True) -> tuple[Path, Path]:
-    """Return (16 kHz mono WAV, compact FLAC copy for upload). Original is untouched."""
+async def preprocess(src: Path, work_dir: Path, denoise: bool = True) -> Path:
+    """Return a cleaned 16 kHz mono FLAC (lossless, small enough to upload). Original is untouched."""
     if src.suffix.lower() not in SUPPORTED:
         raise AudioError(f"Unsupported file type {src.suffix!r}; expected one of {sorted(SUPPORTED)}")
     work_dir.mkdir(parents=True, exist_ok=True)
-    wav = work_dir / f"{src.stem}.16k.wav"
     flac = work_dir / f"{src.stem}.16k.flac"
     chain = f"{DENOISE_CHAIN},{NORMALIZE}" if denoise else NORMALIZE
     await _run("ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-vn", "-ac", "1", "-ar", "16000",
-               "-af", chain, "-c:a", "pcm_s16le", str(wav))
-    await _run("ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-c:a", "flac", str(flac))
-    return wav, flac
+               "-af", chain, "-c:a", "flac", str(flac))
+    return flac
 
 
 async def cut_clip(src: Path, start: float, end: float, dst: Path) -> Path:

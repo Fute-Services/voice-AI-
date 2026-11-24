@@ -19,7 +19,7 @@ from .base import STTProvider
 
 log = logging.getLogger(__name__)
 BASE = "https://api.assemblyai.com"
-POLL_S = 5
+POLL_MIN_S, POLL_MAX_S = 1.0, 5.0  # short calls finish in seconds: start fast, back off to 5 s
 MAX_WAIT_S = 3600
 
 
@@ -70,7 +70,7 @@ class AssemblyAIProvider(STTProvider):
                 r.raise_for_status()
                 return r.json()
 
-            waited = 0
+            waited, delay = 0.0, POLL_MIN_S
             while True:
                 data = await with_retry("AssemblyAI poll", poll)
                 if data["status"] == "completed":
@@ -79,8 +79,9 @@ class AssemblyAIProvider(STTProvider):
                     raise APIError(f"AssemblyAI transcription failed: {data.get('error')}")
                 if waited > MAX_WAIT_S:
                     raise APIError(f"AssemblyAI job {tid} still {data['status']} after {MAX_WAIT_S}s")
-                await asyncio.sleep(POLL_S)
-                waited += POLL_S
+                await asyncio.sleep(delay)
+                waited += delay
+                delay = min(delay * 1.5, POLL_MAX_S)
 
         model = data.get("speech_model_used") or data.get("speech_model") or s.assemblyai_models[0]
         audio_s = float(data.get("audio_duration") or duration)

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 
 import httpx
 from google.genai import errors as genai_errors
@@ -45,9 +46,32 @@ def is_transient(exc: BaseException) -> bool:
     return delay is None or delay <= MAX_SERVER_RETRY_DELAY_S
 
 
+def is_timeout(exc: BaseException) -> bool:
+    if isinstance(exc, (httpx.TimeoutException, TimeoutError)):
+        return True
+    return isinstance(exc, genai_errors.APIError) and exc.code == 504
+
+
+def _quick(exc: BaseException) -> bool:
+    """Worth another try on the SAME model: transient, but not a timeout (that already cost the full deadline)."""
+    return is_transient(exc) and not is_timeout(exc)
+
+
 def _log_retry(state) -> None:
     exc = state.outcome.exception()
     log.warning("attempt %d failed (%s: %s); retrying", state.attempt_number, type(exc).__name__, str(exc)[:200])
+
+
+# A model that just failed with an overload / quota error is tried last for this long, so the next chunk and
+# the analysis call don't each burn their own retries rediscovering that it is down.
+COOLDOWN_S = 180
+_cooling: dict[str, float] = {}
+
+
+def _order(models: list[str]) -> list[str]:
+    now = time.monotonic()
+    models = list(dict.fromkeys(m for m in models if m))
+    return sorted(models, key=lambda m: _cooling.get(m, 0) > now)  # stable: healthy first, original order kept
 
 
 async def with_fallback(what: str, fn, models: list[str]):
@@ -55,25 +79,29 @@ async def with_fallback(what: str, fn, models: list[str]):
 
     A model that is overloaded (503 "high demand") usually stays overloaded for minutes, so each model gets
     only a couple of quick tries before we move on, instead of backing off for minutes on the first one.
+    A model that timed out is not retried at all while another model is left to try.
     Raises APIError if every model fails.
     """
-    models = list(dict.fromkeys(m for m in models if m))
+    models = _order(models)
     last: APIError | None = None
     for i, model in enumerate(models):
         final = i == len(models) - 1
         try:
-            return await with_retry(f"{what} ({model})", fn, model, attempts=3 if final else 2, max_wait=8), model
+            return await with_retry(f"{what} ({model})", fn, model, attempts=3 if final else 2, max_wait=8,
+                                    retry_if=is_transient if final else _quick), model
         except APIError as exc:
             last = exc
+            _cooling[model] = time.monotonic() + COOLDOWN_S
             log.warning("%s%s", exc, "" if final else f" - switching to {models[i + 1]}")
     raise last or APIError(f"{what} failed: no model configured")
 
 
-async def with_retry(what: str, fn, *args, attempts: int = 5, max_wait: float = 60, **kwargs):
+async def with_retry(what: str, fn, *args, attempts: int = 5, max_wait: float = 60, retry_if=is_transient,
+                     **kwargs):
     """Await fn(*args, **kwargs), retrying transient errors. Wraps final failure in APIError."""
     try:
         async for attempt in AsyncRetrying(
-            retry=retry_if_exception(is_transient),
+            retry=retry_if_exception(retry_if),
             stop=stop_after_attempt(attempts),
             wait=wait_exponential_jitter(initial=min(3, max_wait), max=max_wait),
             before_sleep=_log_retry,

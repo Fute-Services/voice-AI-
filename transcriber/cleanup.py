@@ -20,6 +20,7 @@ from google.genai import types
 
 from .config import ConfigError, Settings
 from .cost import CostTracker
+from .llm import generate
 from .models import Segment
 from .preprocess import cut_clip
 from .retry import APIError, Transient, with_fallback
@@ -30,6 +31,7 @@ UNCLEAR = "[unclear]"
 # Reject a cleaned segment whose word count drifts this far from the raw one:
 # that means the model summarised, dropped or invented speech.
 MIN_RATIO, MAX_RATIO, MIN_WORDS_FOR_RATIO = 0.6, 1.5, 4
+MAX_TIMEOUT_S = 300
 
 
 @dataclass
@@ -142,6 +144,15 @@ def apply_edits(owned: list[Segment], edits: dict[int, str]) -> None:
         s.text = new
 
 
+def request_timeout(clip_seconds: float) -> float:
+    """Deadline for one cleanup request, sized to the clip.
+
+    An overloaded model does not fail fast, it hangs until the deadline. A flat 3 minutes meant a 1-minute
+    call could sit for 3 minutes per attempt before the fallback model was even tried.
+    """
+    return min(MAX_TIMEOUT_S, 45 + 0.2 * clip_seconds)
+
+
 class Cleaner:
     def __init__(self, settings: Settings, cost: CostTracker):
         if not settings.gemini_api_key:
@@ -151,7 +162,7 @@ class Cleaner:
         self.s = settings
         self.cost = cost
         self.client = genai.Client(api_key=settings.gemini_api_key,
-                                   http_options=types.HttpOptions(timeout=180_000))
+                                   http_options=types.HttpOptions(timeout=MAX_TIMEOUT_S * 1000))
         self.config = types.GenerateContentConfig(
             system_instruction=SYSTEM.format(script_rule=SCRIPT_RULES[settings.hindi_script]),
             response_mime_type="application/json",
@@ -163,10 +174,10 @@ class Cleaner:
         async with sem:
             clip = await cut_clip(audio, chunk.audio_start, chunk.audio_end, work / f"chunk{chunk.index:03d}.ogg")
             contents = [types.Part.from_bytes(data=clip.read_bytes(), mime_type="audio/ogg"), build_prompt(chunk)]
+            timeout = request_timeout(chunk.audio_end - chunk.audio_start)
 
             async def call(model: str) -> dict[int, str]:
-                resp = await self.client.aio.models.generate_content(
-                    model=model, contents=contents, config=self.config)
+                resp = await generate(self.client, model, contents, self.config, self.s.thinking_level, timeout)
                 self.cost.add_gemini("cleanup", model, resp.usage_metadata)
                 try:
                     data = json.loads(resp.text)
