@@ -66,9 +66,12 @@ def print_analysis(a: dict) -> None:
           + ("  ** needs human review **" if a.get("needs_review") else ""))
     print(f"  Why:  {a.get('reason', '')}")
     print(f"  Next: {a.get('next_action', '')}" + (f"  [{a['follow_up_when']}]" if a.get("follow_up_when") else ""))
-    missed = (a.get("discovery") or {}).get("missed") or []
-    if missed:
-        print(f"  Ask next time ({len(missed)}): " + "; ".join(q["topic"] for q in missed))
+    ap = a.get("agent_performance") or {}
+    if ap.get("score") is not None:
+        print(f"  Agent: {ap['score']}/100 (grade {ap['grade']})"
+              + (f" - coach: {ap['improvements'][0]['tip']}" if ap.get("improvements") else ""))
+    for i, q in enumerate(a.get("next_questions") or [], 1):
+        print(f"  {'Ask next:' if i == 1 else '         '} {i}. {q['hinglish']}")
 
 
 def main(argv: list[str] | None = None) -> int:

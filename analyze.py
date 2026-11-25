@@ -17,6 +17,7 @@ from transcribe import print_analysis
 from transcriber.analysis import Analyzer, to_markdown
 from transcriber.config import ConfigError, Settings
 from transcriber.cost import CostTracker
+from transcriber.metrics import call_metrics
 from transcriber.models import Segment
 from transcriber.retry import APIError
 
@@ -29,6 +30,9 @@ async def analyze_file(path: Path, settings: Settings) -> dict:
     result = await Analyzer(settings, cost).analyze(segs)
     stem = path.name.removesuffix(".transcript.json")
     data["analysis"] = result
+    data.setdefault("meta", {})["metrics"] = call_metrics(segs, data.get("duration") or 0,
+                                                          result.get("agent_speaker") or "",
+                                                          result.get("customer_speaker") or "")
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     (path.parent / f"{stem}.analysis.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     (path.parent / f"{stem}.analysis.md").write_text(to_markdown(result, stem), encoding="utf-8")

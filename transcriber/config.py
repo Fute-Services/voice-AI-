@@ -57,6 +57,9 @@ class Settings:
     chunk_len_s: float = field(default_factory=lambda: float(_env("CHUNK_LEN_S", "600")))
     chunk_overlap_s: float = field(default_factory=lambda: float(_env("CHUNK_OVERLAP_S", "15")))
     max_concurrency: int = field(default_factory=lambda: int(_env("MAX_CONCURRENCY", "2")))
+    # How long the cleanup / analysis models "think" before answering: minimal|low|medium|high, or "default"
+    # for the model's own setting. "low" is about twice as fast and cheaper; raise it only if results look worse.
+    thinking_level: str = field(default_factory=lambda: _env("THINKING_LEVEL", "low"))
 
     # Call outcome analysis (real-estate: interested / site visit / follow up / not interested ...)
     analysis: bool = field(default_factory=lambda: _bool("ANALYSIS", True))

@@ -73,11 +73,32 @@ marked `needs_review`.
   suggested pitch angle for the next call. Anything the call did not reveal stays `unknown`.
 - `buying_signals` / `risk_signals`: each backed by a customer quote that is checked against the transcript
   (unbacked signals are removed).
-- `discovery`: which of the 11 discovery topics the call covered, and for every topic missed, the question
-  the agent should ask next time (short, easy-to-ask wording in English and Hinglish). The question bank is
-  `DISCOVERY` in `transcriber/analysis.py`; edit it there to change the wording.
+- `discovery`: the state of each of the 11 discovery topics: `covered` (with what the customer said),
+  `dodged` (the agent asked, the customer did not answer) or `missed` (never came up).
+- `next_questions`: up to 5 questions for the next conversation, written for this customer in Hinglish and
+  English with a one-line reason each. They build on what the customer said, never re-ask something already
+  answered, and fit the stage of the lead (no booking questions for a busy or cold customer, none for a
+  wrong number). If the model writes too few, the fixed bank (`DISCOVERY` in `transcriber/analysis.py`)
+  tops the list up to 3; those are marked `"tailored": false`.
 - `lead_score` (0-100): computed in code from the outcome, urgency, decision maker, financing, and whether
   budget, location and motive are known.
+
+**Agent coaching.** The same analysis call also judges the **sales agent**:
+
+- `agent_performance.skills`: 7 skills (opening, rapport, need discovery, relevant pitch, objection handling,
+  closing, professionalism), each 1-5 or 0 = "did not come up", with a one-line reason and an agent quote.
+- `agent_performance.score` (0-100) and `grade` (A-D) are computed in code from the skills that applied.
+  Wrong-number calls get no score, so they don't drag an agent's average down.
+- `strengths`, `improvements` (each with the agent's line and a `better_line`: what to say instead, in
+  Hinglish) and `compliance` (pressure tactics, false promises, made-up offers).
+- `key_moments`: up to 6 moments that mattered (buying signal, objection, price talk, commitment...),
+  pinned to real segments so the UI can play them.
+- `sentiment_arc`: the customer's mood at the start, middle and end of the call.
+
+**Call metrics (free, no model call).** `meta.metrics` in the transcript JSON is measured from timestamps
+(`transcriber/metrics.py`): talk time and talk ratio per speaker, speaking pace, longest monologue, questions
+asked, interruptions, average reply time, silence and long pauses, plus rule-based hints such as "Agent talked
+78% of the call".
 
 Re-run only the decision on existing transcripts (no new STT cost):
 
@@ -95,6 +116,22 @@ python app.py        # then open http://localhost:8000
 Upload a file (or try the sample call), pick the script and cleanup model, and read the transcript.
 Click any line to play that part of the audio, and download the JSON/MD/TXT/review files.
 Runs are saved under `out/web/`.
+
+- **Agent coaching** tab: score ring, skill scorecard, coaching points with better lines, talk-time split and
+  call-health hints.
+- **Ask AI** tab: ask anything about the call in English or Hinglish ("Customer ka budget kya hai?"). Answers
+  come only from the transcript and cite the lines they used; click a cited line to play it.
+- **Dashboard** (top bar, or press `D`): KPIs across every saved call (hot leads, site visits, average lead and
+  agent score), outcome breakdown, upcoming follow-ups, and a searchable, sortable table of all calls.
+  Click a row to reopen that call. **Export leads (CSV)** downloads the table for Excel / Google Sheets.
+- Links are shareable: `/#dashboard`, `/#run/<id>`, `/#run/<id>/coaching`.
+
+| endpoint | what it returns |
+|---|---|
+| `GET /api/runs` | every saved call, newest first, with outcome, scores and follow-up |
+| `GET /api/runs/{id}` | one saved call in the same shape as `/api/transcribe` |
+| `POST /api/runs/{id}/ask` | `{"question": "...", "history": [...]}` → answer + checked citations |
+| `GET /api/leads.csv` | all analysed calls as CSV |
 
 ### Outputs (in `--out`)
 
